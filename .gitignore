@@ -1,0 +1,67 @@
+# Env
+.env
+.env.local
+.env.*.local
+.env.development.local
+.env.production.local
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.venv/
+venv/
+env/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+coverage.xml
+.tox/
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+.turbo/
+*.tsbuildinfo
+next-env.d.ts
+.vercel/
+
+# Modal
+.modal/
+modal_cache/
+
+# IDE / OS
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+logs/
+
+# Local workspace artifacts (mirror OmegaClips convention)
+workspace/
+input/
+output/
+output_shorts/
+artifacts/local/
+temp_batch*/
+*.tmp
+
+# Secrets / keys
+*.pem
+*.key
+secrets/
+
+# Plan-mode + claude scratch (not project state)
+.claude/local/

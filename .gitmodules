@@ -1,0 +1,3 @@
+[submodule "packages/intel"]
+	path = packages/intel
+	url = https://github.com/winmican26-cmyk/OmegaClips.git

@@ -1,0 +1,19 @@
+[project]
+name = "aidirector"
+version = "0.0.0"
+description = "AI Director Agent SaaS — root workspace"
+requires-python = ">=3.11"
+
+[tool.uv.workspace]
+members = ["apps/api", "workers"]
+
+# Note: OmegaClips at packages/intel has no pyproject.toml of its own. Workers
+# add packages/intel to PYTHONPATH (locally) or mount it into the Modal image
+# (in production). See workers/src/workers/modal_app.py for the Modal mount.
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "N"]
