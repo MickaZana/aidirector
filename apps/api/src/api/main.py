@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from api.config import get_settings
-from api.routers import billing, exports, health, jobs, uploads, webhooks
+from api.routers import billing, director_plans, exports, health, jobs, uploads, webhooks
 
 
 @asynccontextmanager
@@ -29,6 +29,7 @@ def create_app() -> FastAPI:
     app.include_router(health.router)
     app.include_router(uploads.router, prefix="/api")
     app.include_router(jobs.router, prefix="/api")
+    app.include_router(director_plans.router, prefix="/api")
     app.include_router(exports.router, prefix="/api")
     app.include_router(billing.router, prefix="/api")
     app.include_router(webhooks.router, prefix="/api")

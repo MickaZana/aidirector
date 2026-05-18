@@ -65,3 +65,8 @@ secrets/
 
 # Plan-mode + claude scratch (not project state)
 .claude/local/
+
+# Schema probe artifacts (local proof-of-work; outputs only — scripts ARE committed)
+apps/api/_probe_*.out
+apps/api/_probe_*.db
+apps/api/aidirector_probe.db

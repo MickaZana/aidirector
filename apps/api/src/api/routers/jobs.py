@@ -1,34 +1,111 @@
-from fastapi import APIRouter
-from pydantic import BaseModel
+"""Jobs router — second half of the MVP loop.
 
-from api.deps import Tenant
+POST /api/jobs creates an analysis Job for an Upload and (in phase 1) enqueues
+the Modal scene-analysis worker. GET returns the current state.
+"""
+from __future__ import annotations
+
+import uuid
+
+from fastapi import APIRouter, HTTPException, status
+from pydantic import BaseModel
+from sqlalchemy import select
+
+from api.deps import DbSession, TenantRow
+from api.models import Job, JobStatus, Upload, UsageEventType
+from api.services.intel.omega_client import submodule_sha
+from api.services.usage_events import emit_usage_event
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
 
 class JobCreate(BaseModel):
-    upload_id: str
-    intent: str = "auto_shorts"
+    upload_id: uuid.UUID
+    intent: str = "analyze"
+    cost_budget_cents: int = 30
 
 
 class JobView(BaseModel):
     id: str
+    tenant_id: str
     upload_id: str
-    status: str
     intent: str
-    cost_cents: int = 0
+    status: str
+    intel_submodule_sha: str | None
+    error: str | None
+    cost_budget_cents: int
+    cost_actual_cents: int
+    created_at: str
+
+
+@router.post("", response_model=JobView, status_code=status.HTTP_201_CREATED)
+def create_job(req: JobCreate, tenant: TenantRow, db: DbSession) -> JobView:
+    upload = db.execute(
+        select(Upload).where(Upload.id == req.upload_id, Upload.tenant_id == tenant.id)
+    ).scalar_one_or_none()
+    if upload is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Upload not found")
+
+    job = Job(
+        tenant_id=tenant.id,
+        upload_id=upload.id,
+        intent=req.intent,
+        status=JobStatus.QUEUED.value,
+        intel_submodule_sha=submodule_sha(),
+        cost_budget_cents=req.cost_budget_cents,
+    )
+    db.add(job)
+    db.flush()
+
+    emit_usage_event(
+        db,
+        tenant_id=tenant.id,
+        upload_id=upload.id,
+        job_id=job.id,
+        event_type=UsageEventType.ANALYSIS_STARTED,
+        unit="job",
+        metadata={"intent": req.intent},
+    )
+    db.commit()
+
+    # Phase 1: enqueue Modal worker here
+    # queue.enqueue("scene_analysis", {"job_id": str(job.id), ...})
+
+    return _serialize(job)
 
 
 @router.get("", response_model=list[JobView])
-def list_jobs(tenant_id: Tenant) -> list[JobView]:
-    return []
-
-
-@router.post("", response_model=JobView)
-def create_job(req: JobCreate, tenant_id: Tenant) -> JobView:
-    raise NotImplementedError("Job creation not wired — needs Postgres + RQ")
+def list_jobs(tenant: TenantRow, db: DbSession) -> list[JobView]:
+    rows = (
+        db.execute(
+            select(Job).where(Job.tenant_id == tenant.id).order_by(Job.created_at.desc())
+        )
+        .scalars()
+        .all()
+    )
+    return [_serialize(j) for j in rows]
 
 
 @router.get("/{job_id}", response_model=JobView)
-def get_job(job_id: str, tenant_id: Tenant) -> JobView:
-    raise NotImplementedError
+def get_job(job_id: uuid.UUID, tenant: TenantRow, db: DbSession) -> JobView:
+    job = db.execute(
+        select(Job).where(Job.id == job_id, Job.tenant_id == tenant.id)
+    ).scalar_one_or_none()
+    if job is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Job not found")
+    return _serialize(job)
+
+
+def _serialize(job: Job) -> JobView:
+    return JobView(
+        id=str(job.id),
+        tenant_id=str(job.tenant_id),
+        upload_id=str(job.upload_id),
+        intent=job.intent,
+        status=job.status,
+        intel_submodule_sha=job.intel_submodule_sha,
+        error=job.error,
+        cost_budget_cents=job.cost_budget_cents,
+        cost_actual_cents=job.cost_actual_cents,
+        created_at=job.created_at.isoformat(),
+    )

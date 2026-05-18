@@ -10,7 +10,14 @@ worker — the foundational integration test.
 """
 from __future__ import annotations
 
+from pathlib import Path
+
 import modal
+
+# Resolve packages/intel from this file's location, not CWD, so `modal run`
+# works no matter where it's invoked from.
+# workers/src/workers/modal_app.py → parents[3] is the repo root.
+_INTEL_DIR = Path(__file__).resolve().parents[3] / "packages" / "intel"
 
 # OmegaClips heavy deps. Trim/extend based on what football_pipeline actually
 # needs at runtime; this is a starting set derived from imports observed in
@@ -27,7 +34,7 @@ intel_image = (
         "boto3>=1.35",
         "pydantic>=2.9",
     )
-    .add_local_dir("../packages/intel", remote_path="/intel")
+    .add_local_dir(_INTEL_DIR, remote_path="/intel")
     .add_local_python_source("workers")
     .env({"PYTHONPATH": "/intel"})
 )

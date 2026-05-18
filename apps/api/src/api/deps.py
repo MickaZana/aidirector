@@ -5,6 +5,8 @@ from sqlalchemy.orm import Session
 
 from api.auth import ClerkClaims, verify_clerk_jwt
 from api.db import get_db
+from api.models import Tenant
+from api.services.tenancy import get_or_create_tenant
 
 
 def require_claims(authorization: Annotated[str | None, Header()] = None) -> ClerkClaims:
@@ -14,10 +16,18 @@ def require_claims(authorization: Annotated[str | None, Header()] = None) -> Cle
     return verify_clerk_jwt(token)
 
 
-def require_tenant(claims: Annotated[ClerkClaims, Depends(require_claims)]) -> str:
+def require_tenant_id(claims: Annotated[ClerkClaims, Depends(require_claims)]) -> str:
     return claims.tenant_id
 
 
+def require_tenant_row(
+    db: Annotated[Session, Depends(get_db)],
+    claims: Annotated[ClerkClaims, Depends(require_claims)],
+) -> Tenant:
+    return get_or_create_tenant(db, claims)
+
+
 DbSession = Annotated[Session, Depends(get_db)]
-Tenant = Annotated[str, Depends(require_tenant)]
+Tenant_ = Annotated[str, Depends(require_tenant_id)]
+TenantRow = Annotated[Tenant, Depends(require_tenant_row)]
 Claims = Annotated[ClerkClaims, Depends(require_claims)]
