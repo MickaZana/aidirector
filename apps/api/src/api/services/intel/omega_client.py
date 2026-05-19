@@ -7,7 +7,8 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-_INTEL_DIR = Path(__file__).resolve().parents[5] / "packages" / "intel"
+# apps/api/src/api/services/intel/omega_client.py → parents[6] is the repo root
+_INTEL_DIR = Path(__file__).resolve().parents[6] / "packages" / "intel"
 
 
 def submodule_sha() -> str | None:

@@ -1,26 +1,43 @@
-"""Scene analysis worker.
+"""Scene analysis worker — Modal-side wrapper over the adapter.
 
-Wraps OmegaClips orchestrator. This is the only place outside
-apps/api/services/intel/ that imports `football_pipeline.*`.
+This file is allowed to import OmegaClips indirectly via the adapter. It
+should NOT contain OmegaClips business logic — the boundary is the adapter
+at `apps/api/src/api/services/intel/scene_analysis_adapter.py`.
 
-Phase 0 status: stub. Phase 1: download from R2, run
-`FootballPipelineOrchestrator.run_full_pipeline`, parse artifacts, return
-SceneAnalysisResult.
+Two entrypoints:
+  - `analyze_video_fixture`: runs the phase-2 OmegaClips integration path
+    (scoreboard change tracking over a synthetic OCR fixture). Useful for
+    local probes and CI smoke tests; does NOT require a video file.
+  - `analyze_video`: phase-3 entrypoint that will download R2 source, run
+    the full orchestrator, and write scenes back. Stub for now.
 """
 from __future__ import annotations
-
-import modal
 
 from workers.modal_app import app, intel_image, secrets
 
 
-@app.function(image=intel_image, secrets=secrets, timeout=1800, memory=8192)
-def analyze_video(upload_id: str, source_r2_key: str, tenant_slug: str) -> dict[str, object]:
-    """Phase 0 stub. Phase 1 will:
-    1. download source_r2_key to /tmp/{upload_id}.mp4
-    2. build PipelineConfig with tenant overrides
-    3. orchestrator.run_full_pipeline()
-    4. read scenes from workspace artifacts
-    5. return shape matching api.services.intel.SceneAnalysisResult
+@app.function(image=intel_image, secrets=secrets, timeout=120, memory=2048)
+def analyze_video_fixture(upload_id: str, fixture_reads: list[dict]) -> dict:
+    """Runs the real OmegaClips ScoreboardChangeTracker path over a fixture sequence.
+
+    Returns the raw SceneAnalysisResult as a dict so the dispatcher can
+    persist it on the AI Director side without round-tripping pydantic
+    across the Modal boundary.
     """
-    raise NotImplementedError("Phase 1 — see plan §9 and docs/omega_capability_map.md")
+    from api.services.intel.scene_analysis_adapter import analyze_video
+
+    result = analyze_video(
+        upload_id=upload_id,
+        source_uri="fixture://memory",
+        fixture_reads=fixture_reads,
+    )
+    return result.model_dump(mode="json")
+
+
+@app.function(image=intel_image, secrets=secrets, timeout=1800, memory=8192)
+def analyze_video(job_id: str, upload_r2_key: str, tenant_slug: str) -> dict:
+    """Phase 3: full-video orchestrator. Stub until R2 + orchestrator wired."""
+    raise NotImplementedError(
+        "Phase 3 — full FootballPipelineOrchestrator integration. "
+        "Use analyze_video_fixture for the phase-2 integration probe."
+    )

@@ -11,6 +11,13 @@ dependencies = [
     "boto3>=1.35",
     "ffmpeg-python>=0.2",
     "Pillow>=11.0",
+    # OmegaClips (football_pipeline) runtime deps. football_pipeline/__init__.py
+    # imports cv2 + numpy at module load time, so any adapter import cascades
+    # through these. Modal image already installs them; we mirror them locally
+    # so the shared .venv can run the Phase 2 probe directly.
+    "opencv-python-headless>=4.10",
+    "numpy>=2.0",
+    "pytesseract>=0.3",
 ]
 
 [tool.uv.sources]
