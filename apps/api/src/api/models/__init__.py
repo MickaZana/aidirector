@@ -17,6 +17,7 @@ from api.models.pipeline import (
     Upload,
     UploadStatus,
 )
+from api.models.exports import ExportArtifact, ExportArtifactStatus
 from api.models.usage import UsageEvent, UsageEventType
 
 __all__ = [
@@ -34,6 +35,8 @@ __all__ = [
     "RenderJob",
     "RenderJobStatus",
     "RenderOutput",
+    "ExportArtifact",
+    "ExportArtifactStatus",
     "UsageEvent",
     "UsageEventType",
 ]

@@ -71,3 +71,5 @@ apps/api/_probe_*.out
 apps/api/_probe_*.db
 apps/api/aidirector_probe.db
 apps/api/_probe_phase5_fixtures/
+apps/api/_probe_phase6_fixtures/
+apps/api/_local_storage/
