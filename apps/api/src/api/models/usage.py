@@ -23,6 +23,7 @@ class UsageEventType(str, enum.Enum):
     EXPORT_CREATED = "export_created"
     ENGAGEMENT_INGESTED = "engagement_ingested"
     EVALUATION_COMPLETED = "evaluation_completed"
+    RANKING_FEEDBACK_APPLIED = "ranking_feedback_applied"
     CREDITS_RESERVED = "credits_reserved"
     CREDITS_CONSUMED = "credits_consumed"
     CREDITS_REFUNDED = "credits_refunded"

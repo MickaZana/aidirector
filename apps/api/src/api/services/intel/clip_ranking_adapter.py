@@ -1,14 +1,23 @@
-"""Clip ranking adapter — real OmegaClips integration (Phase 3).
+"""Clip ranking adapter — real OmegaClips integration with controlled
+engagement feedback (Phase 3 + Phase 8).
 
-Wraps OmegaClips's `rank_goal_candidate_windows_for_intent` ranking pipeline
-(capability map IDs #11 best moments, #21 quality score, #23 confidence score
-— all status A). The function uses a `shot_change_overrides` hook to skip
-video-based CV when overrides are provided, and accepts an empty
-`audio_signals` list — letting us run real ranking on AI Director's persisted
-scenes without needing a real video file.
+Wraps OmegaClips's `rank_goal_candidate_windows_for_intent` ranking
+pipeline. Phase 8 adds an optional `prior_performance` argument that
+maps `scene_index → PerformanceFeatureView`. When supplied, the adapter
+runs each candidate's `rank_score` through `apply_feedback_to_rank_score`
+(see `ranking_feedback_adapter`) which applies a deterministic,
+confidence-gated, capped adjustment.
 
-For phase 3.5 the override hook is replaced by real shot-change densities
-sourced from the analyzer's output; the adapter's contract does not change.
+Hard rules (enforced by import discipline + probe assertions):
+  - NO `from api.models import EngagementEvent` here.
+  - NO `from api.services.engagement_aggregation import …` here.
+  - The ranker only ever reads `PerformanceFeatureView` (a frozen
+    dataclass of 12 derived fields).
+  - The OmegaClips `rank_score` is never overwritten — it's preserved
+    as `base_rank_score` in the candidate's `scores` dict, and
+    `final_rank_score` = `base_rank_score + engagement_adjustment`
+    (clamped). `CandidateRecord.confidence_score` reflects the final
+    score so downstream consumers see the adjusted value.
 """
 from __future__ import annotations
 
@@ -21,6 +30,11 @@ from api.services.intel.capability_registry import (
     SceneRecord,
 )
 from api.services.intel.omega_client import is_populated, submodule_path
+from api.services.intel.ranking_feedback_adapter import (
+    FeedbackOutcome,
+    PerformanceFeatureView,
+    apply_feedback_to_rank_score,
+)
 
 _INTEL_DIR = submodule_path()
 if _INTEL_DIR.exists() and str(_INTEL_DIR) not in sys.path:
@@ -32,19 +46,24 @@ def rank_clip_candidates(
     scenes: list[SceneRecord],
     *,
     ranking_intent: str = "goal_action",
+    prior_performance: dict[int, PerformanceFeatureView] | None = None,
 ) -> RankedClipCandidates:
-    """Rank scenes into clip candidates using real OmegaClips ranking.
+    """Rank scenes into clip candidates using real OmegaClips ranking,
+    optionally applying controlled engagement feedback.
 
-    Scenes are expected to be goal-event scenes produced by
-    `scene_analysis_adapter.analyze_video` — i.e. each carries a
-    `signals.scoreboard_delta` payload and `signals.t_confirmed`. For each
-    scene we synthesize the inputs OmegaClips's ranker expects (a
-    `confirmed_score_change` dict + a `candidate_window` dict) and call
-    `rank_goal_candidate_windows_for_intent` with synthetic
-    `shot_change_overrides` so no video file is touched.
+    Without `prior_performance` (the Phase 3 path): identical behaviour
+    to before. Each candidate's `scores.rank_score` matches
+    `scores.base_rank_score`; `engagement_adjustment` is 0;
+    `feedback_applied` is False.
 
-    Returns `RankedClipCandidates` — one `CandidateRecord` per scene, in
-    rank order, with scores sourced from the real signal breakdown.
+    With `prior_performance` mapping `scene_index → PerformanceFeatureView`
+    (the Phase 8 path): for each ranked candidate, the matching view (if
+    any) is passed to `apply_feedback_to_rank_score`. The structural
+    `base_rank_score` is preserved verbatim. The adjustment is capped at
+    ±`ENGAGEMENT_WEIGHT_CAP` (0.15) and zeroed when confidence is below
+    `CONFIDENCE_THRESHOLD` (0.30). The final score is
+    `clamp(0,1, base + adjustment)`; downstream consumers see it via
+    `CandidateRecord.confidence_score` and `scores.rank_score`.
     """
     if not is_populated():
         raise RuntimeError(
@@ -76,7 +95,9 @@ def rank_clip_candidates(
         shot_change_overrides=shot_change_overrides,
     )
 
-    return _report_to_candidates(upload_id, report, ranking_intent)
+    return _report_to_candidates(
+        upload_id, report, ranking_intent, prior_performance=prior_performance or {}
+    )
 
 
 def _scenes_to_ranker_inputs(
@@ -156,8 +177,11 @@ def _report_to_candidates(
     upload_id: str,
     report: dict[str, Any],
     ranking_intent: str,
+    *,
+    prior_performance: dict[int, PerformanceFeatureView],
 ) -> RankedClipCandidates:
-    """Map OmegaClips ranker report → CandidateRecord list."""
+    """Map OmegaClips ranker report → CandidateRecord list, optionally
+    applying controlled engagement feedback per candidate."""
     candidates: list[CandidateRecord] = []
     for entry in report.get("candidate_windows_evaluated", []):
         breakdown = entry.get("signal_breakdown", {}) or {}
@@ -165,11 +189,21 @@ def _report_to_candidates(
         rank_score = float(entry.get("rank_score", 0.0))
         change_index = int(entry.get("change_index", 0))
 
-        # OmegaClips's rank_score combines all signals weighted per intent
-        # — map it directly to confidence. Quality is the audio + shot
-        # composite. Platform score isn't ranking-specific yet (Phase 4
-        # work) so default to neutral.
-        confidence_score = round(min(1.0, max(0.0, rank_score)), 3)
+        # Phase 8: optionally apply controlled feedback. The view comes
+        # from `ranking_feedback_adapter`, which itself only exposes
+        # derived fields — raw events never reach this code path.
+        view = prior_performance.get(change_index)
+        outcome: FeedbackOutcome = apply_feedback_to_rank_score(rank_score, view)
+
+        # base = what OmegaClips said (never overwritten in the scores dict)
+        # final = base + capped, confidence-gated engagement adjustment
+        base_rank_score = round(outcome.base_rank_score, 4)
+        final_rank_score = round(outcome.final_rank_score, 4)
+
+        # `confidence_score` and the legacy `rank_score` key both reflect
+        # the FINAL score so downstream (director plan builder, etc.) sees
+        # the adjusted value. The base is preserved separately for audit.
+        confidence_score = round(min(1.0, max(0.0, final_rank_score)), 3)
         quality_score = round(
             min(
                 1.0,
@@ -193,7 +227,16 @@ def _report_to_candidates(
                 rationale=str(entry.get("ranking_explanation", "")),
                 scores={
                     "rank": rank,
-                    "rank_score": rank_score,
+                    "rank_score": final_rank_score,        # legacy key = final
+                    "base_rank_score": base_rank_score,    # what OmegaClips said
+                    "engagement_adjustment": outcome.engagement_adjustment,
+                    "final_rank_score": final_rank_score,
+                    "feedback_applied": outcome.feedback_applied,
+                    "feature_version": outcome.feature_version,
+                    "confidence_threshold": outcome.confidence_threshold,
+                    "engagement_weight_cap": outcome.engagement_weight_cap,
+                    "feedback_explanation": outcome.explanation,
+                    "feedback_breakdown": outcome.breakdown,
                     "ranking_intent": ranking_intent,
                     "ranking_engine": "OmegaClips.window_ranking",
                     "signal_breakdown": breakdown,

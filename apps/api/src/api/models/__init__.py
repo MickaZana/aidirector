@@ -25,6 +25,7 @@ from api.models.performance import (
     MaturityState,
     PerformanceFeatureSet,
 )
+from api.models.ranking import RankingSnapshot
 from api.models.usage import UsageEvent, UsageEventType
 
 __all__ = [
@@ -49,6 +50,7 @@ __all__ = [
     "ExperimentGroup",
     "MaturityState",
     "PerformanceFeatureSet",
+    "RankingSnapshot",
     "UsageEvent",
     "UsageEventType",
 ]
