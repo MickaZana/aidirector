@@ -14,6 +14,8 @@ class UsageEventType(str, enum.Enum):
     UPLOAD_CREATED = "upload_created"
     ANALYSIS_STARTED = "analysis_started"
     ANALYSIS_COMPLETED = "analysis_completed"
+    RANKING_STARTED = "ranking_started"
+    RANKING_COMPLETED = "ranking_completed"
     CANDIDATE_CREATED = "candidate_created"
     DIRECTOR_PLAN_CREATED = "director_plan_created"
     RENDER_STARTED = "render_started"

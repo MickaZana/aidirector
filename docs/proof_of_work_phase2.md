@@ -4,7 +4,20 @@
 **Submodule:** packages/intel @ 78fcd57
 **Prior commits:** 57625d9 (Phase 0 scaffold), 135c5ef (Phase 0→1 spine)
 
-**Status: PASS.** The phase-2 probe exits 0 with real OmegaClips `ScoreboardChangeTracker` confirming 2 score changes over a synthetic OCR fixture. Two bugs surfaced during validation and were fixed in-session (§7); the runtime is now clean.
+**Status: PASS (local).** The phase-2 probe exits 0 with real OmegaClips `ScoreboardChangeTracker` confirming 2 score changes over a synthetic OCR fixture. Two bugs surfaced during validation and were fixed in-session (§7); the runtime is now clean.
+
+### Modal status (corrected)
+
+This phase proved the local-equivalent integration path. The Modal cloud gate is **NOT closed** until `modal run workers/src/workers/modal_app.py::ping_intel` runs successfully in Modal cloud with real output.
+
+| Aspect | Status |
+|---|---|
+| Local import path (`football_pipeline.*`) | ✅ proven |
+| Local OmegaClips integration (real `ScoreboardChangeTracker` lifecycle) | ✅ proven |
+| Modal runbook | ✅ written ([docs/runbooks/modal_hello_import.md](runbooks/modal_hello_import.md)) |
+| Modal cloud execution (image build, remote PYTHONPATH, submodule mount) | ⏳ pending operator `modal token new` + `modal run` |
+
+Local-equivalent ≠ cloud-proven. The adapter calls the same `football_pipeline.*` symbols the Modal worker will call, but cloud-only failure modes (image dep gaps, mount-path issues, secret resolution) remain unverified until the operator runs the gate.
 
 ## §1 — What was built
 
