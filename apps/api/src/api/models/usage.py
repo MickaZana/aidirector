@@ -21,6 +21,8 @@ class UsageEventType(str, enum.Enum):
     RENDER_STARTED = "render_started"
     RENDER_COMPLETED = "render_completed"
     EXPORT_CREATED = "export_created"
+    ENGAGEMENT_INGESTED = "engagement_ingested"
+    EVALUATION_COMPLETED = "evaluation_completed"
     CREDITS_RESERVED = "credits_reserved"
     CREDITS_CONSUMED = "credits_consumed"
     CREDITS_REFUNDED = "credits_refunded"

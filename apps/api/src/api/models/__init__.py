@@ -18,6 +18,13 @@ from api.models.pipeline import (
     UploadStatus,
 )
 from api.models.exports import ExportArtifact, ExportArtifactStatus
+from api.models.performance import (
+    EngagementEvent,
+    EngagementMetricType,
+    ExperimentGroup,
+    MaturityState,
+    PerformanceFeatureSet,
+)
 from api.models.usage import UsageEvent, UsageEventType
 
 __all__ = [
@@ -37,6 +44,11 @@ __all__ = [
     "RenderOutput",
     "ExportArtifact",
     "ExportArtifactStatus",
+    "EngagementEvent",
+    "EngagementMetricType",
+    "ExperimentGroup",
+    "MaturityState",
+    "PerformanceFeatureSet",
     "UsageEvent",
     "UsageEventType",
 ]
