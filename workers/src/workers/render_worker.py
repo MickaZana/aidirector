@@ -1,28 +1,41 @@
-"""Unified render worker.
+"""Render worker — Modal-side wrapper over the render plan adapter.
 
-The Director Plan's `render_style` is resolved (in apps/api/services/intel/
-render_plan_adapter.resolve_render_spec) to a pipeline name. This worker
-dispatches to the matching OmegaClips renderer:
+The worker contains NO encoding logic, NO FFmpeg argument building, and
+NO DirectorPlan reading. It receives a serialised `RenderManifest`, hands
+it to the adapter, and persists the result via the persistence service.
 
-  ffmpeg_finisher  -> football_pipeline.render_execution
-  static_generator -> AI Director's own static_generator renderer
-  hyperframes      -> AI Director's HyperFrames pipeline (phase 3)
-  remotion         -> AI Director's Remotion pipeline (phase 3)
+The boundary is intentional: a future renderer swap (HyperFrames on Modal
+GPU, Remotion via Node) replaces the adapter only — the worker, the
+manifest, and the persistence layer all stay unchanged.
 
-Phase 0 status: stub. Phase 1 wires ffmpeg_finisher; phase 2 adds static_generator.
+Entrypoints:
+  - `render_one_fixture(manifest_dict, output_dir)` — phase 5 fixture path
+  - `render_one(render_job_id, tenant_slug)` — phase 5.5 stub (reads
+    manifest from DB)
 """
 from __future__ import annotations
-
-import modal
 
 from workers.modal_app import app, intel_image, secrets
 
 
-@app.function(image=intel_image, secrets=secrets, timeout=1200, memory=4096)
-def render_clip_variant(
-    render_job_id: str, tenant_slug: str
-) -> dict[str, object]:
-    """Phase 0 stub. Phase 1 reads RenderJob.settings and invokes the resolved pipeline."""
+@app.function(image=intel_image, secrets=secrets, timeout=600, memory=4096)
+def render_one_fixture(manifest_dict: dict, output_dir: str) -> dict:
+    """Phase 5 path: caller supplies a manifest dict; we render to local disk
+    inside the Modal container and return the execution result."""
+    from pathlib import Path
+
+    from api.schemas.render_manifest import RenderManifest
+    from api.services.intel.render_plan_adapter import render_clip
+
+    manifest = RenderManifest.model_validate(manifest_dict)
+    result = render_clip(manifest, output_dir=Path(output_dir))
+    return result.model_dump(mode="json")
+
+
+@app.function(image=intel_image, secrets=secrets, timeout=1800, memory=8192)
+def render_one(render_job_id: str, tenant_slug: str) -> dict:
+    """Phase 5.5: read RenderJob from Postgres, hydrate manifest, render,
+    persist. Stub until the DB-driven loader path is wired."""
     raise NotImplementedError(
-        "Phase 1 — wraps football_pipeline.render_execution.execute_render_manifest"
+        "Phase 5.5 — read RenderJob.settings manifest from DB, run adapter, persist."
     )
