@@ -1,0 +1,81 @@
+"use client";
+
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import {
+  Activity,
+  Clapperboard,
+  Film,
+  LayoutGrid,
+  LineChart,
+  Sparkles,
+  Upload,
+} from "lucide-react";
+import { cn } from "@/lib/cn";
+
+const NAV = [
+  { href: "/app/upload", label: "Upload Studio", icon: Upload, accent: true },
+  { href: "/app/jobs", label: "Pipelines", icon: Activity },
+  { href: "/app/clips", label: "Clips Board", icon: LayoutGrid },
+  { href: "/app/director", label: "Director Review", icon: Sparkles },
+  { href: "/app/renders", label: "Render Center", icon: Film },
+  { href: "/app/performance", label: "Performance", icon: LineChart },
+];
+
+export function Sidebar() {
+  const pathname = usePathname();
+  return (
+    <aside className="hidden lg:flex flex-col w-64 shrink-0 border-r border-[color:var(--color-border-soft)] bg-[color:var(--color-surface-1)]/60 backdrop-blur-sm h-screen sticky top-0">
+      <div className="flex items-center gap-2.5 px-5 h-16 border-b border-[color:var(--color-border-soft)]">
+        <div className="relative h-7 w-7 rounded-lg bg-gradient-to-br from-[color:var(--color-accent-green)] to-[color:var(--color-accent-blue)] shadow-[0_0_24px_-4px_rgba(0,230,161,0.6)]">
+          <div className="absolute inset-0.5 rounded-md bg-[color:var(--color-surface-0)] flex items-center justify-center">
+            <Clapperboard className="h-3.5 w-3.5 text-[color:var(--color-accent-green)]" strokeWidth={2.5} />
+          </div>
+        </div>
+        <div className="flex flex-col">
+          <span className="font-semibold tracking-tight text-sm">AI Director</span>
+          <span className="text-[10px] uppercase tracking-[0.18em] text-[color:var(--color-text-tertiary)]">
+            Sports · v0.9
+          </span>
+        </div>
+      </div>
+
+      <nav className="flex-1 px-3 py-4 space-y-0.5">
+        {NAV.map((item) => {
+          const active = pathname?.startsWith(item.href) ?? false;
+          const Icon = item.icon;
+          return (
+            <Link
+              key={item.href}
+              href={item.href as never}
+              className={cn(
+                "group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium tracking-tight transition-colors duration-[var(--motion-fast)]",
+                active
+                  ? "bg-[color:var(--color-surface-2)] text-[color:var(--color-text-primary)] shadow-[inset_0_0_0_1px_var(--color-border-accent)]"
+                  : "text-[color:var(--color-text-secondary)] hover:bg-[color:var(--color-surface-2)]/60 hover:text-[color:var(--color-text-primary)]",
+              )}
+            >
+              <Icon
+                className={cn(
+                  "h-4 w-4 shrink-0 transition-colors",
+                  active
+                    ? "text-[color:var(--color-accent-green)]"
+                    : "text-[color:var(--color-text-tertiary)] group-hover:text-[color:var(--color-text-secondary)]",
+                )}
+                strokeWidth={2}
+              />
+              <span>{item.label}</span>
+              {item.accent && !active && (
+                <span className="ml-auto h-1.5 w-1.5 rounded-full bg-[color:var(--color-accent-green)] shadow-[0_0_8px_rgba(0,230,161,0.7)]" />
+              )}
+            </Link>
+          );
+        })}
+      </nav>
+
+      <div className="px-5 py-4 border-t border-[color:var(--color-border-soft)] text-[10px] uppercase tracking-[0.18em] text-[color:var(--color-text-tertiary)]">
+        OmegaClips · 78fcd57
+      </div>
+    </aside>
+  );
+}
