@@ -29,6 +29,7 @@ class JobStatus(str, enum.Enum):
     SUCCEEDED = "succeeded"
     FAILED = "failed"
     CANCELLED = "cancelled"
+    RETRYING = "retrying"
 
 
 class RenderJobStatus(str, enum.Enum):
@@ -36,6 +37,7 @@ class RenderJobStatus(str, enum.Enum):
     RENDERING = "rendering"
     SUCCEEDED = "succeeded"
     FAILED = "failed"
+    RETRYING = "retrying"
 
 
 class Upload(Base, TimestampMixin):
@@ -88,6 +90,11 @@ class Job(Base, TimestampMixin):
     finished_at: Mapped[datetime | None] = mapped_column(nullable=True)
     cost_budget_cents: Mapped[int] = mapped_column(Integer, nullable=False, default=30)
     cost_actual_cents: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # --- Phase 10 operational fields -----------------------------------
+    worker_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    started_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    heartbeat_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    retry_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
 
 class Scene(Base, TimestampMixin):
@@ -166,6 +173,8 @@ class RenderJob(Base, TimestampMixin):
         Index("ix_render_jobs_job_id", "job_id"),
         Index("ix_render_jobs_status", "status"),
         Index("ix_render_jobs_created_at", "created_at"),
+        Index("ix_render_jobs_idempotency_key", "idempotency_key", unique=True),
+        Index("ix_render_jobs_heartbeat_at", "heartbeat_at"),
     )
 
     id: Mapped[uuid.UUID] = uuid_pk()
@@ -188,6 +197,14 @@ class RenderJob(Base, TimestampMixin):
     finished_at: Mapped[datetime | None] = mapped_column(nullable=True)
     gpu_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
     cost_cents: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # --- Phase 10 operational fields -----------------------------------
+    worker_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    started_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    heartbeat_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    retry_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # sha256(candidate_id|variant_id|render_style|version) — UNIQUE.
+    # Re-running the same render fixture must not produce a duplicate row.
+    idempotency_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
 
 class RenderOutput(Base, TimestampMixin):

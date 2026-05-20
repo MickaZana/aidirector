@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from api.models import Job, JobStatus, Scene, UsageEventType
 from api.services.intel.capability_registry import SceneAnalysisResult
+from api.services.state_transitions import transition
 from api.services.usage_events import emit_usage_event
 
 
@@ -43,7 +44,18 @@ def persist_scene_analysis(
         rows.append(row)
     db.flush()
 
-    job.status = JobStatus.SUCCEEDED.value
+    # Drive job through the state guard. If the job hadn't been
+    # transitioned into RUNNING first (e.g. a probe seeded it queued and
+    # we're going straight to succeeded), step it through running first.
+    if job.status == JobStatus.QUEUED.value:
+        transition(db, job, JobStatus.RUNNING.value, reason="analysis_started")
+    transition(
+        db,
+        job,
+        JobStatus.SUCCEEDED.value,
+        worker_id=job.worker_id,
+        reason="analysis_completed",
+    )
     job.intel_submodule_sha = result.intel_submodule_sha
     db.flush()
 

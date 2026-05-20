@@ -34,6 +34,7 @@ class ExportArtifactStatus(str, enum.Enum):
     UPLOADED = "uploaded"
     PUBLISHED = "published"
     FAILED = "failed"
+    RETRYING = "retrying"
 
 
 class ExportArtifact(Base, TimestampMixin):

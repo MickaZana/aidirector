@@ -29,6 +29,17 @@ class UsageEventType(str, enum.Enum):
     CREDITS_REFUNDED = "credits_refunded"
     JOB_FAILED = "job_failed"
     USER_APPROVED_CLIP = "user_approved_clip"
+    # --- operational audit (Phase 10) -------------------------------
+    TRANSITION_ACCEPTED = "transition_accepted"
+    TRANSITION_REJECTED = "transition_rejected"
+    TRANSITION_FORCED = "transition_forced"
+    WORKER_STARTED = "worker_started"
+    WORKER_HEARTBEAT = "worker_heartbeat"
+    WORKER_STALE_DETECTED = "worker_stale_detected"
+    WORKER_RETRY_INITIATED = "worker_retry_initiated"
+    IDEMPOTENCY_REPLAY = "idempotency_replay"
+    R2_UPLOAD_COMPLETED = "r2_upload_completed"
+    R2_UPLOAD_VERIFIED = "r2_upload_verified"
 
 
 class UsageEvent(Base, TimestampMixin):

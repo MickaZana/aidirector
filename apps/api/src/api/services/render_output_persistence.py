@@ -25,6 +25,7 @@ from sqlalchemy.orm import Session
 from api.models import Job, RenderJob, RenderJobStatus, RenderOutput, UsageEventType
 from api.schemas.render_manifest import RenderManifest
 from api.services.intel.render_plan_adapter import RenderExecutionResult
+from api.services.state_transitions import transition
 from api.services.usage_events import emit_usage_event
 
 
@@ -33,8 +34,18 @@ def start_render_job(
     *,
     job: Job,
     manifest: RenderManifest,
+    idempotency_key: str | None = None,
+    worker_id: str | None = None,
 ) -> RenderJob:
-    """INSERT a RenderJob row + emit RENDER_STARTED."""
+    """INSERT a RenderJob row (status=queued) then drive it through the
+    state guard into RENDERING + emit RENDER_STARTED.
+
+    `idempotency_key` should be supplied by the caller — typically built
+    via `services.idempotency.render_idempotency_key(...)`. The UNIQUE
+    index on the column means a duplicate worker firing for the same
+    (candidate, variant, render_style, plan_version) will raise on commit;
+    callers should pre-check with `idempotency.claim_render` and skip.
+    """
     row = RenderJob(
         id=uuid.UUID(manifest.render_job_id),
         job_id=job.id,
@@ -42,12 +53,25 @@ def start_render_job(
         candidate_id=uuid.UUID(manifest.candidate_id),
         pipeline=manifest.renderer,
         platform=manifest.platform,
-        status=RenderJobStatus.RENDERING.value,
+        status=RenderJobStatus.QUEUED.value,
         settings={
             "manifest": manifest.model_dump(mode="json"),
         },
+        idempotency_key=idempotency_key,
+        worker_id=worker_id,
     )
     db.add(row)
+    db.flush()
+
+    # Drive queued → rendering through the guard so a stray prior call
+    # that already moved this row into a terminal state fails loudly.
+    transition(
+        db,
+        row,
+        RenderJobStatus.RENDERING.value,
+        worker_id=worker_id,
+        reason="start_render_job",
+    )
     db.flush()
 
     emit_usage_event(
@@ -86,7 +110,13 @@ def complete_render_job(
     if r2_key is None:
         r2_key = f"local://{result.output_path}" if result.output_path else "local://unknown"
 
-    render_job.status = RenderJobStatus.SUCCEEDED.value
+    transition(
+        db,
+        render_job,
+        RenderJobStatus.SUCCEEDED.value,
+        worker_id=render_job.worker_id,
+        reason="render_completed",
+    )
     render_job.finished_at = datetime.now(timezone.utc)
     render_job.cost_cents = _estimate_cost_cents(result)
     db.flush()
@@ -138,7 +168,13 @@ def fail_render_job(
     manifest: RenderManifest,
     result: RenderExecutionResult,
 ) -> None:
-    render_job.status = RenderJobStatus.FAILED.value
+    transition(
+        db,
+        render_job,
+        RenderJobStatus.FAILED.value,
+        worker_id=render_job.worker_id,
+        reason=result.error or "unknown render failure",
+    )
     render_job.finished_at = datetime.now(timezone.utc)
     render_job.error = result.error or "unknown render failure"
     db.flush()

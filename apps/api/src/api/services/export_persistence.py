@@ -24,6 +24,7 @@ from api.models import (
     UsageEventType,
 )
 from api.services.export_artifact_builder import ExportArtifactInputs
+from api.services.state_transitions import transition
 from api.services.usage_events import emit_usage_event
 
 
@@ -84,8 +85,15 @@ def mark_export_failed(
     export: ExportArtifact,
     error: str,
     error_metadata: dict | None = None,
+    worker_id: str | None = None,
 ) -> None:
-    export.export_status = ExportArtifactStatus.FAILED.value
+    transition(
+        db,
+        export,
+        ExportArtifactStatus.FAILED.value,
+        reason=error,
+        worker_id=worker_id,
+    )
     db.flush()
 
     emit_usage_event(
@@ -109,8 +117,15 @@ def mark_export_published(
     *,
     export: ExportArtifact,
     when: datetime | None = None,
+    worker_id: str | None = None,
 ) -> None:
-    """Flag an export as posted to its target platform. No new usage event."""
-    export.export_status = ExportArtifactStatus.PUBLISHED.value
+    """Flag an export as posted to its target platform. No new usage event
+    beyond the TRANSITION_ACCEPTED row that the guard emits."""
+    transition(
+        db,
+        export,
+        ExportArtifactStatus.PUBLISHED.value,
+        worker_id=worker_id,
+    )
     export.published_at = when or datetime.now(timezone.utc)
     db.flush()
