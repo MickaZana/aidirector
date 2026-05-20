@@ -31,6 +31,7 @@ out/
 *.tsbuildinfo
 next-env.d.ts
 .vercel/
+.pnpm-store/
 
 # Modal
 .modal/
@@ -39,6 +40,7 @@ modal_cache/
 # IDE / OS
 .vscode/
 .idea/
+*.code-workspace
 *.swp
 *.swo
 .DS_Store
