@@ -7,6 +7,7 @@ import type { ApiClient } from "./client";
 import type {
   DirectorPlan,
   Job,
+  JobEvents,
   JobView,
   Upload,
   UsageEvent,
@@ -83,11 +84,19 @@ export class Endpoints {
 
   // --- Job "view" (composite query the dashboard needs) ----------------
   /**
-   * A composite query: backend route to be added in Phase 9.5.
-   * For now the client falls back to fixtures when this 404s.
+   * Composite query backing the entire job page in one round-trip.
+   * Backed by `GET /api/jobs/{id}/view` (Phase 9.5).
    */
   getJobView(jobId: string) {
     return this.client.get<JobView>(`/api/jobs/${jobId}/view`);
+  }
+
+  /**
+   * Cheap status refresh — polled by `PollingTransport`. Bumping
+   * `revision` on the server side is the signal to refetch `getJobView`.
+   */
+  getJobEvents(jobId: string) {
+    return this.client.get<JobEvents>(`/api/jobs/${jobId}/events`);
   }
 
   // --- Usage / billing --------------------------------------------------

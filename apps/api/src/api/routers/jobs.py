@@ -2,6 +2,10 @@
 
 POST /api/jobs creates an analysis Job for an Upload and (in phase 1) enqueues
 the Modal scene-analysis worker. GET returns the current state.
+
+`/api/jobs/{id}/view` returns the JobView composite (everything a job-page
+needs in one round-trip — see schemas/job_view.py). `/api/jobs/{id}/events`
+is the cheap polling-friendly status refresh.
 """
 from __future__ import annotations
 
@@ -13,7 +17,9 @@ from sqlalchemy import select
 
 from api.deps import DbSession, TenantRow
 from api.models import Job, JobStatus, Upload, UsageEventType
+from api.schemas.job_view import JobEventsView, JobView
 from api.services.intel.omega_client import submodule_sha
+from api.services.job_view_service import build_job_events, build_job_view
 from api.services.usage_events import emit_usage_event
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
@@ -25,7 +31,7 @@ class JobCreate(BaseModel):
     cost_budget_cents: int = 30
 
 
-class JobView(BaseModel):
+class JobRowOut(BaseModel):
     id: str
     tenant_id: str
     upload_id: str
@@ -38,8 +44,8 @@ class JobView(BaseModel):
     created_at: str
 
 
-@router.post("", response_model=JobView, status_code=status.HTTP_201_CREATED)
-def create_job(req: JobCreate, tenant: TenantRow, db: DbSession) -> JobView:
+@router.post("", response_model=JobRowOut, status_code=status.HTTP_201_CREATED)
+def create_job(req: JobCreate, tenant: TenantRow, db: DbSession) -> JobRowOut:
     upload = db.execute(
         select(Upload).where(Upload.id == req.upload_id, Upload.tenant_id == tenant.id)
     ).scalar_one_or_none()
@@ -74,8 +80,8 @@ def create_job(req: JobCreate, tenant: TenantRow, db: DbSession) -> JobView:
     return _serialize(job)
 
 
-@router.get("", response_model=list[JobView])
-def list_jobs(tenant: TenantRow, db: DbSession) -> list[JobView]:
+@router.get("", response_model=list[JobRowOut])
+def list_jobs(tenant: TenantRow, db: DbSession) -> list[JobRowOut]:
     rows = (
         db.execute(
             select(Job).where(Job.tenant_id == tenant.id).order_by(Job.created_at.desc())
@@ -86,8 +92,8 @@ def list_jobs(tenant: TenantRow, db: DbSession) -> list[JobView]:
     return [_serialize(j) for j in rows]
 
 
-@router.get("/{job_id}", response_model=JobView)
-def get_job(job_id: uuid.UUID, tenant: TenantRow, db: DbSession) -> JobView:
+@router.get("/{job_id}", response_model=JobRowOut)
+def get_job(job_id: uuid.UUID, tenant: TenantRow, db: DbSession) -> JobRowOut:
     job = db.execute(
         select(Job).where(Job.id == job_id, Job.tenant_id == tenant.id)
     ).scalar_one_or_none()
@@ -96,8 +102,26 @@ def get_job(job_id: uuid.UUID, tenant: TenantRow, db: DbSession) -> JobView:
     return _serialize(job)
 
 
-def _serialize(job: Job) -> JobView:
-    return JobView(
+@router.get("/{job_id}/view", response_model=JobView)
+def get_job_view(job_id: uuid.UUID, tenant: TenantRow, db: DbSession) -> JobView:
+    """Composite view — everything a job-page needs in one round-trip."""
+    view = build_job_view(db, tenant=tenant, job_id=job_id)
+    if view is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Job not found")
+    return view
+
+
+@router.get("/{job_id}/events", response_model=JobEventsView)
+def get_job_events(job_id: uuid.UUID, tenant: TenantRow, db: DbSession) -> JobEventsView:
+    """Cheap polling target — bump `revision` triggers a JobView refetch on the client."""
+    events = build_job_events(db, tenant=tenant, job_id=job_id)
+    if events is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Job not found")
+    return events
+
+
+def _serialize(job: Job) -> JobRowOut:
+    return JobRowOut(
         id=str(job.id),
         tenant_id=str(job.tenant_id),
         upload_id=str(job.upload_id),

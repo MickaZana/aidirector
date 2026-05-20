@@ -1,8 +1,18 @@
-"""Standalone schema probe.
+"""Base-model metadata probe (NOT the full schema proof).
 
-Imports api.models, builds all tables in an in-memory SQLite, and writes a
-report to _probe_schema.out. Bypasses Alembic CLI entirely to isolate where
-problems are.
+Imports `api.models`, asks SQLAlchemy to materialise `Base.metadata` into
+a throwaway SQLite DB, and dumps tables + columns + indexes. This proves
+the ORM declarations themselves are import-clean and self-consistent.
+
+It deliberately does **not** prove what production sees: only models that
+end up in `Base.metadata` are reflected here, the DDL is whatever
+`create_all` synthesises (no migration history, no per-revision DDL
+differences), and Alembic is not exercised at all. Tables added to a
+migration but not (yet) in `Base.metadata` would silently slip past this
+probe.
+
+For the authoritative schema proof — Alembic-applied DDL, the full
+15-table set, unique indexes, and FK chains — see `_probe_full_schema.py`.
 """
 import os
 import sys

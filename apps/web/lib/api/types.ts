@@ -332,3 +332,28 @@ export interface JobView {
   snapshots: RankingSnapshot[];
   usage_events: UsageEvent[];
 }
+
+/**
+ * Polling status refresh — cheap heartbeat for the JobEventTransport.
+ * Mirrors `apps/api/src/api/schemas/job_view.py::JobEventsView`.
+ *
+ * The client polls this every few seconds. When `revision` (monotonic,
+ * bumped on each usage_event row) changes, it refetches the full JobView.
+ */
+export interface JobEvents {
+  job_id: string;
+  status: JobStatus;
+  revision: number;
+  last_event_at: string | null;
+  last_event_type: UsageEventType | null;
+  counts: {
+    scenes: number;
+    candidates: number;
+    render_jobs: number;
+    render_outputs: number;
+    exports: number;
+    feature_views: number;
+    snapshots: number;
+    usage_events: number;
+  };
+}

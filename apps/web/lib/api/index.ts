@@ -17,6 +17,7 @@ export type {
   ExportArtifact,
   ExportArtifactStatus,
   Job,
+  JobEvents,
   JobStatus,
   JobView,
   MaturityState,

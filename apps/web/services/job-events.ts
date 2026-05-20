@@ -1,16 +1,22 @@
 /**
  * Job event transport — polling-backed today, websocket-ready tomorrow.
  *
- * Components don't poll; they subscribe to a `JobEventStream`. The
- * implementation pulls from the API on an interval. When the backend
- * gets a real WebSocket endpoint, swap the `PollingTransport` for a
- * `SocketTransport` and the subscribers don't change.
+ * Components don't poll; they subscribe to a `JobEventTransport`. The
+ * polling implementation hits the cheap `/events` endpoint on an
+ * interval and refetches the full `/view` only when `revision` changes
+ * — that keeps the bandwidth proportional to *actual* pipeline progress
+ * rather than wall-clock time.
+ *
+ * When the backend gets a real WebSocket endpoint, swap the
+ * `PollingTransport` for `WebSocketTransport` at the provider and the
+ * subscribers don't change.
  */
 import type { Endpoints } from "@/lib/api/endpoints";
-import type { JobView } from "@/lib/api/types";
+import type { JobEvents, JobView } from "@/lib/api/types";
 
 export type JobEvent =
   | { type: "view"; view: JobView }
+  | { type: "events"; events: JobEvents }
   | { type: "error"; error: unknown };
 
 export interface JobEventTransport {
@@ -26,12 +32,27 @@ export class PollingTransport implements JobEventTransport {
   subscribe(jobId: string, onEvent: (evt: JobEvent) => void): () => void {
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | null = null;
+    let lastRevision: number | null = null;
+
+    const refetchView = async () => {
+      try {
+        const view = await this.endpoints.getJobView(jobId);
+        if (!cancelled) onEvent({ type: "view", view });
+      } catch (error) {
+        if (!cancelled) onEvent({ type: "error", error });
+      }
+    };
 
     const tick = async () => {
       if (cancelled) return;
       try {
-        const view = await this.endpoints.getJobView(jobId);
-        if (!cancelled) onEvent({ type: "view", view });
+        const events = await this.endpoints.getJobEvents(jobId);
+        if (cancelled) return;
+        onEvent({ type: "events", events });
+        if (lastRevision === null || events.revision !== lastRevision) {
+          lastRevision = events.revision;
+          await refetchView();
+        }
       } catch (error) {
         if (!cancelled) onEvent({ type: "error", error });
       } finally {
