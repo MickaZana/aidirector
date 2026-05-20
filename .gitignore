@@ -67,6 +67,7 @@ secrets/
 
 # Plan-mode + claude scratch (not project state)
 .claude/local/
+.claude/settings.local.json
 
 # Schema probe artifacts (local proof-of-work; outputs only — scripts ARE committed)
 apps/api/_probe_*.out
