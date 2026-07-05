@@ -1,0 +1,145 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ─── Python API ────────────────────────────────────────────────────────────
+  api-test:
+    name: API unit tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/api
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies (with ASR extra)
+        run: uv sync --extra asr
+
+      - name: Run unit tests
+        run: uv run pytest tests/unit/ -v --tb=short --no-header
+
+      - name: Assert schema version is bumped (regression guard)
+        run: |
+          uv run python -c "
+          from api.schemas.render_manifest import RENDER_MANIFEST_VERSION
+          assert RENDER_MANIFEST_VERSION != '1', \
+            'RENDER_MANIFEST_VERSION was reset to 1 — bump it when schema changes'
+          print('schema version ok:', RENDER_MANIFEST_VERSION)
+          "
+
+  api-alembic-check:
+    name: Alembic migration consistency
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/api
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Verify migration chain is linear (no orphan heads)
+        run: |
+          uv run python -c "
+          from alembic.config import Config
+          from alembic.script import ScriptDirectory
+          cfg = Config('alembic.ini')
+          script = ScriptDirectory.from_config(cfg)
+          heads = script.get_heads()
+          assert len(heads) == 1, f'Multiple alembic heads found: {heads}. Squash them before merging.'
+          print('alembic head ok:', heads[0])
+          "
+
+  # ─── Next.js web ───────────────────────────────────────────────────────────
+  web-build:
+    name: Next.js build + type-check
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: apps/web/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Type-check
+        run: pnpm tsc --noEmit
+
+      - name: Build
+        run: pnpm build
+        env:
+          # Stub values so the build doesn't fail on missing env vars.
+          NEXT_PUBLIC_API_URL: http://localhost:8000
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_stub
+
+  # ─── Lighthouse CI ────────────────────────────────────────────────────────
+  lighthouse:
+    name: Lighthouse CI (performance regression)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: apps/web/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build (production)
+        run: pnpm build
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:8000
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_stub
+
+      - name: Run Lighthouse CI
+        run: pnpm dlx @lhci/cli@0.14.x autorun
+        env:
+          LHCI_GITHUB_APP_TOKEN: ${{ secrets.LHCI_GITHUB_APP_TOKEN }}
+        continue-on-error: true

@@ -31,6 +31,7 @@ Public API:
   - `IllegalTransition` raised for any rejected transition.
   - `legal_transitions(row_type) -> mapping[str, frozenset[str]]`
 """
+
 from __future__ import annotations
 
 import uuid
@@ -88,9 +89,7 @@ class IllegalTransition(RuntimeError):
 
 JOB_TRANSITIONS: dict[str, frozenset[str]] = {
     JobStatus.QUEUED.value: frozenset({JobStatus.RUNNING.value, JobStatus.FAILED.value}),
-    JobStatus.RUNNING.value: frozenset(
-        {JobStatus.SUCCEEDED.value, JobStatus.FAILED.value}
-    ),
+    JobStatus.RUNNING.value: frozenset({JobStatus.SUCCEEDED.value, JobStatus.FAILED.value}),
     JobStatus.FAILED.value: frozenset({"retrying"}),
     "retrying": frozenset({JobStatus.RUNNING.value, JobStatus.FAILED.value}),
     JobStatus.SUCCEEDED.value: frozenset(),  # terminal
@@ -106,9 +105,7 @@ RENDER_JOB_TRANSITIONS: dict[str, frozenset[str]] = {
         {RenderJobStatus.SUCCEEDED.value, RenderJobStatus.FAILED.value}
     ),
     RenderJobStatus.FAILED.value: frozenset({"retrying"}),
-    "retrying": frozenset(
-        {RenderJobStatus.RENDERING.value, RenderJobStatus.FAILED.value}
-    ),
+    "retrying": frozenset({RenderJobStatus.RENDERING.value, RenderJobStatus.FAILED.value}),
     RenderJobStatus.SUCCEEDED.value: frozenset(),  # terminal
 }
 
@@ -188,18 +185,22 @@ def transition(
 
     if to == JobStatus.CANCELLED.value and force and isinstance(row, Job):
         # Admin override — explicit and audited.
-        setattr(row, attr, to)
-        _emit_audit_event(
-            db,
-            row=row,
-            kind=kind,
-            from_state=from_state,
-            to_state=to,
-            event_type=UsageEventType.TRANSITION_FORCED,
-            reason=reason,
-            worker_id=worker_id,
-        )
-        return from_state
+    setattr(row, attr, to)
+    _emit_audit_event(
+        db,
+        row=row,
+        kind=kind,
+        from_state=from_state,
+        to_state=to,
+        event_type=UsageEventType.TRANSITION_FORCED,
+        reason=reason,
+        worker_id=worker_id,
+    )
+
+    # Publish to WebSocket event stream (fire-and-forget, best-effort)
+    _publish_event(kind, row, from_state, to_state, reason)
+
+    return from_state
 
     if to not in allowed:
         _emit_audit_event(
@@ -231,10 +232,42 @@ def transition(
         reason=reason,
         worker_id=worker_id,
     )
+
+    # Publish to WebSocket event stream (fire-and-forget, best-effort)
+    _publish_event(kind, row, from_state, to_state, reason)
+
     return from_state
 
 
 # --- audit helper ---------------------------------------------------------
+
+
+def _publish_event(
+    kind: str, row: TransitionRow, from_state: str, to_state: str, reason: str | None
+) -> None:
+    """Publish transition to Redis Pub/Sub for WebSocket streaming."""
+    try:
+        import uuid
+        from datetime import datetime, timezone
+        from api.services.events import publish_job_event
+
+        job_id: str | None = None
+        if isinstance(row, Job):
+            job_id = str(row.id)
+        elif hasattr(row, "job_id") and row.job_id is not None:
+            job_id = str(row.job_id)
+
+        if job_id:
+            publish_job_event(job_id, {
+                "kind": kind,
+                "row_id": str(row.id),
+                "from_state": from_state,
+                "to_state": to_state,
+                "reason": reason,
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
+            })
+    except Exception:
+        pass  # best-effort — WebSocket publishing must never block a transition
 
 
 def _emit_audit_event(

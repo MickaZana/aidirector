@@ -20,7 +20,15 @@ dependencies = [
     "pyjwt[crypto]>=2.10",
     "sentry-sdk[fastapi]>=2.18",
     "logfire>=2.0",
+    "modal>=0.73",
+    "cryptography>=43.0",
+    "svix>=1.96.1",
+    "slowapi>=0.1.10",
+    "prometheus-fastapi-instrumentator>=7.0",
 ]
+
+[project.optional-dependencies]
+asr = ["faster-whisper>=1.1"]
 
 [build-system]
 requires = ["hatchling"]
@@ -28,3 +36,13 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/api"]
+
+[tool.pytest.ini_options]
+markers = [
+    "integration: marks tests that require external resources (ffmpeg, SOURCE_VIDEO env var)",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]

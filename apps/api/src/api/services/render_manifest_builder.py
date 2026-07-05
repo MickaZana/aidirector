@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
+from pathlib import Path
 
 from api.schemas.director_plan import (
     CaptionStyle,
@@ -53,12 +54,22 @@ def build_manifests(
     source_uri: str,
     tenant_id: str,
     tenant_slug: str,
+    source_path: Path | None = None,
+    source_duration_s: float | None = None,
+    srt_output_dir: Path | None = None,
 ) -> ManifestBuildResult:
     """Convert all variants in a DirectorPlan into RenderManifest objects.
 
     Variants that fail renderer-compatibility validation are excluded with
     a recorded reason. The caller decides whether to surface, retry, or
     fail the whole batch.
+
+    Optional enrichment: when `source_path` and `srt_output_dir` are both
+    provided, each manifest is enriched with a viral title (via viral_title)
+    and a per-clip SRT (via transcribe). Callers that omit these params get
+    `title=None, subtitle_uri=None` — backward compatible.
+    `source_duration_s` is required for viral title position logic when
+    source_path is supplied; pass Upload.duration_s.
     """
     manifests: list[RenderManifest] = []
     unrenderable: list[tuple[str, str, CompatibilityResult]] = []
@@ -72,6 +83,9 @@ def build_manifests(
                 source_uri=source_uri,
                 tenant_id=tenant_id,
                 tenant_slug=tenant_slug,
+                source_path=source_path,
+                source_duration_s=source_duration_s,
+                srt_output_dir=srt_output_dir,
             )
             result = validate_manifest(manifest)
             if not result.compatible:
@@ -95,6 +109,9 @@ def _build_one(
     source_uri: str,
     tenant_id: str,
     tenant_slug: str,
+    source_path: Path | None = None,
+    source_duration_s: float | None = None,
+    srt_output_dir: Path | None = None,
 ) -> RenderManifest:
     preset = get_preset(variant.platform)
     width, height = preset["resolution"]
@@ -102,7 +119,8 @@ def _build_one(
     # Cap clip duration to the platform duration cap; the editorial clip
     # duration may exceed the platform cap for some variants.
     duration = min(float(candidate.duration), float(variant.duration_cap))
-    clip_end = candidate.clip_start + duration
+    clip_start = float(candidate.clip_start)
+    clip_end = clip_start + duration
 
     renderer = renderer_for_style(candidate.render_style)
     cap = get_renderer(renderer)
@@ -115,6 +133,19 @@ def _build_one(
     normalize_audio = "normalize_audio" in cap.capabilities
     filename = filename_for(variant.platform, tenant_slug, candidate.candidate_id)
 
+    title: str | None = None
+    subtitle_uri: str | None = None
+    if source_path is not None and srt_output_dir is not None:
+        title, subtitle_uri = _enrich_overlays(
+            source_path=source_path,
+            clip_start=clip_start,
+            clip_end=clip_end,
+            source_duration_s=source_duration_s or duration,
+            candidate_id=candidate.candidate_id,
+            variant_id=variant.variant_id,
+            srt_output_dir=srt_output_dir,
+        )
+
     return RenderManifest(
         render_job_id=str(uuid.uuid4()),
         candidate_id=candidate.candidate_id,
@@ -122,7 +153,7 @@ def _build_one(
         job_id=plan.job_id,
         tenant_id=tenant_id,
         source_uri=source_uri,
-        clip_start=float(candidate.clip_start),
+        clip_start=clip_start,
         clip_end=clip_end,
         duration=duration,
         platform=variant.platform,
@@ -140,6 +171,8 @@ def _build_one(
         crop_mode=crop_mode,
         watermark=watermark,
         normalize_audio=normalize_audio,
+        title=title,
+        subtitle_uri=subtitle_uri,
         filename_template=preset["filename_template"],
         output_filename=filename,
         execution_metadata={
@@ -150,6 +183,43 @@ def _build_one(
             "platform_preset": dict(preset),
         },
     )
+
+
+def _enrich_overlays(
+    *,
+    source_path: Path,
+    clip_start: float,
+    clip_end: float,
+    source_duration_s: float,
+    candidate_id: str,
+    variant_id: str,
+    srt_output_dir: Path,
+) -> tuple[str | None, str | None]:
+    """Transcribe a clip slice and derive a viral title. Returns (title, subtitle_uri).
+
+    Both are best-effort: any failure returns (None, None) so the caller still
+    gets a valid manifest — without overlays rather than crashing.
+    """
+    from api.services.transcribe import transcribe_to_srt
+    from api.services.viral_title import TitleHints, build_title, read_srt_text
+
+    srt_path = srt_output_dir / f"{candidate_id}_{variant_id}.srt"
+    try:
+        transcribe_to_srt(source_path, clip_start, clip_end, srt_path)
+    except Exception:
+        return None, None
+
+    transcript = read_srt_text(srt_path)
+    title = build_title(
+        TitleHints(
+            transcript=transcript,
+            index=1,
+            total=1,
+            clip_start_s=clip_start,
+            source_duration_s=source_duration_s,
+        )
+    )
+    return title, str(srt_path.resolve())
 
 
 def _bitrate_preset_for_platform(platform: PlatformTarget) -> BitratePreset:

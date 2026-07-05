@@ -1,5 +1,11 @@
 """Persist RenderJob + RenderOutput rows + emit render lifecycle usage events.
 
+Also records Stripe meter events for GPU seconds (Sprint 3 metered billing).
+"""
+from __future__ import annotations
+
+import logging
+
 Used by:
 - workers.render_worker (after the adapter returns)
 - the phase-5 local probe (drives the same path without Modal)
@@ -15,6 +21,7 @@ Lifecycle:
 This split lets the worker emit RENDER_STARTED before kicking off a long
 ffmpeg subprocess, so dashboard queries reflect in-flight work.
 """
+
 from __future__ import annotations
 
 import uuid
@@ -27,6 +34,8 @@ from api.schemas.render_manifest import RenderManifest
 from api.services.intel.render_plan_adapter import RenderExecutionResult
 from api.services.state_transitions import transition
 from api.services.usage_events import emit_usage_event
+
+log = logging.getLogger(__name__)
 
 
 def start_render_job(
@@ -157,6 +166,16 @@ def complete_render_job(
             "bytes": result.bytes,
         },
     )
+
+    # Record Stripe meter event for GPU seconds (fire-and-forget)
+    try:
+        from api.services.billing import record_meter_for_tenant
+
+        gpu_seconds = max(1, int(result.elapsed_seconds or 0))
+        record_meter_for_tenant(db, str(job.tenant_id), "gpu_second", quantity=gpu_seconds)
+    except Exception:
+        log.exception("render_output: failed to record Stripe meter for render")
+
     return output_row
 
 

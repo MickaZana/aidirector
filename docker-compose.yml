@@ -1,0 +1,68 @@
+version: "3.9"
+
+# Local development stack. Mirrors the production topology:
+#   api      — FastAPI app
+#   worker   — RQ render worker (same image, different CMD)
+#   postgres — Neon-compatible Postgres
+#   redis    — Upstash-compatible Redis
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: aidirector
+      POSTGRES_USER: aidirector
+      POSTGRES_PASSWORD: dev_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aidirector"]
+      interval: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 5
+
+  api:
+    build:
+      context: apps/api
+      dockerfile: Dockerfile
+    env_file: .env.local
+    environment:
+      DATABASE_URL: postgresql://aidirector:dev_password@postgres:5432/aidirector
+      REDIS_URL: redis://redis:6379
+      ENV: development
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: apps/api
+      dockerfile: Dockerfile
+    command: ["rq", "worker", "--url", "redis://redis:6379", "q:render-cpu", "q:cv", "q:llm", "q:export"]
+    env_file: .env.local
+    environment:
+      DATABASE_URL: postgresql://aidirector:dev_password@postgres:5432/aidirector
+      REDIS_URL: redis://redis:6379
+      ENV: development
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  postgres_data:

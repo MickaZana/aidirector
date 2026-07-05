@@ -17,9 +17,11 @@ from sqlalchemy import select
 
 from api.deps import DbSession, TenantRow
 from api.models import Job, JobStatus, Upload, UsageEventType
+from api.services.billing import check_match_quota
 from api.schemas.job_view import JobEventsView, JobView
 from api.services.intel.omega_client import submodule_sha
 from api.services.job_view_service import build_job_events, build_job_view
+from api.services.queue import queue_for
 from api.services.usage_events import emit_usage_event
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
@@ -46,6 +48,9 @@ class JobRowOut(BaseModel):
 
 @router.post("", response_model=JobRowOut, status_code=status.HTTP_201_CREATED)
 def create_job(req: JobCreate, tenant: TenantRow, db: DbSession) -> JobRowOut:
+    plan = getattr(tenant, "plan", "starter") or "starter"
+    check_match_quota(db, tenant_id=str(tenant.id), plan=plan)
+
     upload = db.execute(
         select(Upload).where(Upload.id == req.upload_id, Upload.tenant_id == tenant.id)
     ).scalar_one_or_none()
@@ -74,8 +79,25 @@ def create_job(req: JobCreate, tenant: TenantRow, db: DbSession) -> JobRowOut:
     )
     db.commit()
 
-    # Phase 1: enqueue Modal worker here
-    # queue.enqueue("scene_analysis", {"job_id": str(job.id), ...})
+    # Dispatch: "analyze" → scene-analysis queue; "render" → render-cpu queue.
+    # The render worker reads the DirectorPlan from DB by job_id, so only the
+    # job_id (plus the source URI hint) needs to be in the payload.
+    if req.intent == "render":
+        queue_for("render-cpu").enqueue(
+            "workers.render_worker.execute_render_job",
+            {"job_id": str(job.id), "source_uri": str(upload.r2_key)},
+            job_timeout=600,
+            result_ttl=86400,
+        )
+    else:
+        # Scene-analysis worker (to be implemented in Sprint 2 modal_app.py)
+        # enqueues render-cpu itself after the DirectorPlan is persisted.
+        queue_for("cv").enqueue(
+            "workers.scene_analysis_worker.run_analysis",
+            {"job_id": str(job.id)},
+            job_timeout=900,
+            result_ttl=86400,
+        )
 
     return _serialize(job)
 

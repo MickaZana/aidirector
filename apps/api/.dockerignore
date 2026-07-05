@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+tests/
+_local_storage/
+_probe_*/
+*.out
+*.db
+alembic/__pycache__/
+.env.local
+.env

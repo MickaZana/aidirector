@@ -27,6 +27,7 @@ from api.models.performance import (
 )
 from api.models.ranking import RankingSnapshot
 from api.models.usage import UsageEvent, UsageEventType
+from api.models.brief_templates import BriefTemplate
 
 __all__ = [
     "Base",
@@ -53,4 +54,5 @@ __all__ = [
     "RankingSnapshot",
     "UsageEvent",
     "UsageEventType",
+    "BriefTemplate",
 ]

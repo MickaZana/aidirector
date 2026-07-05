@@ -15,10 +15,16 @@ from api.models import Tenant
 
 def get_or_create_tenant(db: Session, claims: ClerkClaims) -> Tenant:
     """Look up by Clerk org_id (stored in `tenants.slug`); create if missing."""
-    stmt = select(Tenant).where(Tenant.slug == claims.tenant_id)
-    tenant = db.execute(stmt).scalar_one_or_none()
+    return get_or_create_tenant_by_ids(db, org_id=claims.tenant_id, org_name=claims.tenant_id)
+
+
+def get_or_create_tenant_by_ids(db: Session, org_id: str, org_name: str = "") -> Tenant:
+    """Upsert tenant by external org_id — used by webhook handlers."""
+    tenant = db.execute(select(Tenant).where(Tenant.slug == org_id)).scalar_one_or_none()
     if tenant is None:
-        tenant = Tenant(slug=claims.tenant_id, name=claims.tenant_id, plan="creator")
+        tenant = Tenant(slug=org_id, name=org_name or org_id, plan="starter")
         db.add(tenant)
         db.flush()
+    elif org_name and tenant.name != org_name:
+        tenant.name = org_name
     return tenant

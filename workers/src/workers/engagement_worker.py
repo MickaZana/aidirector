@@ -10,6 +10,7 @@ Entrypoints:
   - `ingest_events_fixture(events)` — phase 7 path
   - `evaluate_export_now(export_id, tenant_slug)` — phase 7.5 stub
 """
+
 from __future__ import annotations
 
 from workers.modal_app import app, intel_image, secrets
@@ -37,7 +38,12 @@ def ingest_events_fixture(
 
     from api.db import engine
     from api.models import (
-        EngagementEvent, ExportArtifact, Job, UsageEventType,
+        EngagementEvent,
+        ExportArtifact,
+        Job,
+        RenderJob,
+        RenderOutput,
+        UsageEventType,
     )
     from api.services.engagement_aggregation import aggregate_engagement_for_export
     from api.services.evaluation_layer import evaluate_export, persist_features
@@ -48,11 +54,28 @@ def ingest_events_fixture(
     with Session(engine) as db:
         artifact = db.execute(
             select(ExportArtifact).where(ExportArtifact.id == _uuid.UUID(export_id))
-        ).scalar_one()
-        job = db.execute(
-            select(Job).where(Job.tenant_id == artifact.tenant_id)
-            .order_by(Job.created_at.desc()).limit(1)
-        ).scalar_one()
+        ).scalar_one_or_none()
+        if artifact is None:
+            raise ValueError(f"ExportArtifact {export_id} not found")
+
+        # Resolve the owning job via ExportArtifact → RenderOutput → RenderJob → Job
+        # chain, NOT by fetching the tenant's most-recent job (which can be wrong
+        # when a tenant has multiple jobs in flight).
+        ro = db.execute(
+            select(RenderOutput).where(RenderOutput.id == artifact.render_output_id)
+        ).scalar_one_or_none()
+        if ro is None:
+            raise ValueError(
+                f"RenderOutput {artifact.render_output_id} not found for export {export_id}"
+            )
+        rj = db.execute(
+            select(RenderJob).where(RenderJob.id == ro.render_job_id)
+        ).scalar_one_or_none()
+        if rj is None:
+            raise ValueError(f"RenderJob {ro.render_job_id} not found for export {export_id}")
+        job = db.execute(select(Job).where(Job.id == rj.job_id)).scalar_one_or_none()
+        if job is None:
+            raise ValueError(f"Job {rj.job_id} not found for export {export_id}")
 
         for e in events:
             row = EngagementEvent(
@@ -89,9 +112,7 @@ def ingest_events_fixture(
             db,
             export=artifact,
             aggregation=agg,
-            experiment_group_id=(
-                _uuid.UUID(experiment_group_id) if experiment_group_id else None
-            ),
+            experiment_group_id=(_uuid.UUID(experiment_group_id) if experiment_group_id else None),
         )
         row = persist_features(db, features=features, job_id=job.id)
         db.commit()

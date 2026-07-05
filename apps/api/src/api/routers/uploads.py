@@ -4,6 +4,7 @@ POST /api/uploads creates an Upload row and returns the presign payload.
 Clients PUT the file to R2 directly using the returned URL, then POST
 /api/uploads/{id}/complete to mark it ready.
 """
+
 from __future__ import annotations
 
 import uuid
@@ -14,6 +15,7 @@ from sqlalchemy import select
 
 from api.deps import Claims, DbSession, TenantRow
 from api.models import Upload, UploadStatus, User, UsageEventType
+from api.services import r2
 from api.services.usage_events import emit_usage_event
 
 router = APIRouter(prefix="/uploads", tags=["uploads"])
@@ -57,12 +59,15 @@ def presign(
     Phase 0: persist the row; presign URL is a stub returning the contract shape.
     The real R2 presigner lives in api.services.r2 — wired in phase 1.
     """
+    from api.services.billing import check_match_quota
+
+    plan = getattr(tenant, "plan", "starter") or "starter"
+    check_match_quota(db, tenant_id=str(tenant.id), plan=plan)
+
     upload_id = uuid.uuid4()
     r2_key = f"tenant/{tenant.id}/upload/{upload_id}/{req.filename}"
 
-    user = db.execute(
-        select(User).where(User.clerk_user_id == claims.user_id)
-    ).scalar_one_or_none()
+    user = db.execute(select(User).where(User.clerk_user_id == claims.user_id)).scalar_one_or_none()
 
     upload = Upload(
         id=upload_id,
@@ -87,11 +92,13 @@ def presign(
     )
     db.commit()
 
+    presign = r2.presign_put(r2_key, content_type=req.content_type, expires_s=900)
+
     return PresignResponse(
         upload_id=str(upload_id),
         r2_key=r2_key,
-        url="https://stub.r2.cloudflarestorage.com/aidirector",
-        fields={"stub": "phase_0_not_yet_wired"},
+        url=presign if isinstance(presign, str) else presign,
+        fields={},
     )
 
 
@@ -101,14 +108,27 @@ def mark_complete(
     tenant: TenantRow,
     db: DbSession,
 ) -> UploadView:
-    """Client calls this after PUT to R2 succeeds."""
+    """Client calls this after PUT to R2 succeeds.
+
+    Verifies the object actually landed in R2 before marking READY.
+    In dev mode (no R2 creds) the head-check is skipped gracefully.
+    """
     upload = db.execute(
         select(Upload).where(Upload.id == upload_id, Upload.tenant_id == tenant.id)
     ).scalar_one_or_none()
     if upload is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Upload not found")
 
+    head = r2.head_object(upload.r2_key)
+    if head is None:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "File not found in storage — upload may not have completed",
+        )
+
     upload.status = UploadStatus.READY.value
+    if head.get("ContentLength"):
+        upload.bytes = int(head["ContentLength"])
     db.commit()
     return _serialize(upload)
 

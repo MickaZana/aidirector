@@ -7,14 +7,21 @@ mutate.
 Tenant scoping is enforced on every query — the caller hands us a
 Tenant and a job_id; we never load a Job by id alone.
 
+Graceful degradation (Sprint 2):
+  When Postgres is unreachable, both functions serve from an in-memory
+  TTL cache. The cache is populated on every successful DB read, so the
+  most recently viewed jobs remain available during a DB outage.
+
 The assembler is intentionally a service, not a router helper, so the
 exact same shape can be returned by:
   - GET /api/jobs/{id}/view (the user-facing endpoint)
   - the dev fixture-export tool (when refreshing fixtures from real DB)
   - tests / probes
 """
+
 from __future__ import annotations
 
+import time
 import uuid
 from typing import Iterable
 
@@ -52,13 +59,83 @@ from api.schemas.job_view import (
 )
 
 
+# ── In-memory TTL cache (Postgres fallback) ──────────────────────────────────
+
+_JOB_VIEW_CACHE: dict[str, tuple[float, JobView]] = {}  # key -> (timestamp, view)
+_JOB_EVENTS_CACHE: dict[str, tuple[float, JobEventsView]] = {}
+_CACHE_TTL_S = 300  # 5 minutes
+
+
+def _cache_key(tenant_id: str, job_id: uuid.UUID) -> str:
+    return f"{tenant_id}:{job_id}"
+
+
+def _cache_get(key: str) -> JobView | None:
+    entry = _JOB_VIEW_CACHE.get(key)
+    if entry is None:
+        return None
+    ts, view = entry
+    if time.monotonic() - ts > _CACHE_TTL_S:
+        del _JOB_VIEW_CACHE[key]
+        return None
+    return view
+
+
+def _cache_set(key: str, view: JobView) -> None:
+    _JOB_VIEW_CACHE[key] = (time.monotonic(), view)
+    # Evict oldest entries if cache grows too large
+    if len(_JOB_VIEW_CACHE) > 500:
+        oldest = sorted(_JOB_VIEW_CACHE.keys(), key=lambda k: _JOB_VIEW_CACHE[k][0])[:100]
+        for k in oldest:
+            del _JOB_VIEW_CACHE[k]
+
+
 def build_job_view(
     db: Session,
     *,
     tenant: Tenant,
     job_id: uuid.UUID,
 ) -> JobView | None:
-    """Return the full composite view, or None if the job doesn't belong to this tenant."""
+    """Return the full composite view, or None if the job doesn't belong to this tenant.
+
+    Falls back to in-memory cache when Postgres is unreachable.
+    """
+    try:
+        return _build_job_view_from_db(db, tenant=tenant, job_id=job_id)
+    except Exception as exc:
+        import logging
+
+        log = logging.getLogger(__name__)
+        log.warning(
+            "build_job_view: DB unreachable (%s) — serving from cache for job %s", exc, job_id
+        )
+        key = _cache_key(str(tenant.id), job_id)
+        cached = _cache_get(key)
+        if cached is not None:
+            return cached
+        log.warning("build_job_view: cache miss for job %s — returning degraded view", job_id)
+        return JobView(
+            job=None,
+            upload=None,
+            scenes=[],
+            candidates=[],
+            director_plan=None,
+            render_jobs=[],
+            render_outputs=[],
+            exports=[],
+            feature_views=[],
+            snapshots=[],
+            usage_events=[],
+        )
+
+
+def _build_job_view_from_db(
+    db: Session,
+    *,
+    tenant: Tenant,
+    job_id: uuid.UUID,
+) -> JobView | None:
+    """Execute the DB queries for the full composite view."""
     job = db.execute(
         select(Job).where(Job.id == job_id, Job.tenant_id == tenant.id)
     ).scalar_one_or_none()
@@ -75,17 +152,25 @@ def build_job_view(
             f"job {job.id} references upload {job.upload_id} that does not exist for tenant {tenant.id}"
         )
 
-    scenes = db.execute(
-        select(Scene)
-        .where(Scene.job_id == job.id, Scene.tenant_id == tenant.id)
-        .order_by(Scene.t_start)
-    ).scalars().all()
+    scenes = (
+        db.execute(
+            select(Scene)
+            .where(Scene.job_id == job.id, Scene.tenant_id == tenant.id)
+            .order_by(Scene.t_start)
+        )
+        .scalars()
+        .all()
+    )
 
-    candidates = db.execute(
-        select(ClipCandidate)
-        .where(ClipCandidate.job_id == job.id, ClipCandidate.tenant_id == tenant.id)
-        .order_by(ClipCandidate.t_start)
-    ).scalars().all()
+    candidates = (
+        db.execute(
+            select(ClipCandidate)
+            .where(ClipCandidate.job_id == job.id, ClipCandidate.tenant_id == tenant.id)
+            .order_by(ClipCandidate.t_start)
+        )
+        .scalars()
+        .all()
+    )
     candidate_ids = [c.id for c in candidates]
 
     plan_row = db.execute(
@@ -98,11 +183,15 @@ def build_job_view(
         DirectorPlanContract.model_validate(plan_row.plan_json) if plan_row else None
     )
 
-    render_jobs = db.execute(
-        select(RenderJob)
-        .where(RenderJob.job_id == job.id, RenderJob.tenant_id == tenant.id)
-        .order_by(RenderJob.created_at)
-    ).scalars().all()
+    render_jobs = (
+        db.execute(
+            select(RenderJob)
+            .where(RenderJob.job_id == job.id, RenderJob.tenant_id == tenant.id)
+            .order_by(RenderJob.created_at)
+        )
+        .scalars()
+        .all()
+    )
     render_job_ids = [rj.id for rj in render_jobs]
 
     render_outputs = (
@@ -113,7 +202,9 @@ def build_job_view(
                 RenderOutput.render_job_id.in_(render_job_ids),
             )
             .order_by(RenderOutput.created_at)
-        ).scalars().all()
+        )
+        .scalars()
+        .all()
         if render_job_ids
         else []
     )
@@ -127,7 +218,9 @@ def build_job_view(
                 ExportArtifact.render_output_id.in_(render_output_ids),
             )
             .order_by(ExportArtifact.created_at)
-        ).scalars().all()
+        )
+        .scalars()
+        .all()
         if render_output_ids
         else []
     )
@@ -141,7 +234,9 @@ def build_job_view(
                 PerformanceFeatureSet.export_id.in_(export_ids),
             )
             .order_by(desc(PerformanceFeatureSet.evaluated_at))
-        ).scalars().all()
+        )
+        .scalars()
+        .all()
         if export_ids
         else []
     )
@@ -154,16 +249,22 @@ def build_job_view(
                 RankingSnapshot.job_id == job.id,
             )
             .order_by(desc(RankingSnapshot.created_at))
-        ).scalars().all()
+        )
+        .scalars()
+        .all()
     )
 
-    usage_events = db.execute(
-        select(UsageEvent)
-        .where(UsageEvent.tenant_id == tenant.id, UsageEvent.job_id == job.id)
-        .order_by(UsageEvent.created_at)
-    ).scalars().all()
+    usage_events = (
+        db.execute(
+            select(UsageEvent)
+            .where(UsageEvent.tenant_id == tenant.id, UsageEvent.job_id == job.id)
+            .order_by(UsageEvent.created_at)
+        )
+        .scalars()
+        .all()
+    )
 
-    return JobView(
+    view = JobView(
         job=_job_view(job),
         upload=_upload_view(upload),
         scenes=[_scene_view(s) for s in scenes],
@@ -176,6 +277,10 @@ def build_job_view(
         snapshots=[_snapshot_view(s) for s in snapshots],
         usage_events=[_usage_view(u) for u in usage_events],
     )
+    # Populate cache for Postgres-fallback availability
+    key = _cache_key(str(tenant.id), job_id)
+    _cache_set(key, view)
+    return view
 
 
 def build_job_events(
@@ -189,7 +294,35 @@ def build_job_events(
     Returns just the bits the client needs to decide whether to refetch
     the full JobView: status, a monotonic revision number (one per
     usage_event row), and the latest usage_event marker.
+
+    Falls back to in-memory cache when Postgres is unreachable.
     """
+    try:
+        return _build_job_events_from_db(db, tenant=tenant, job_id=job_id)
+    except Exception as exc:
+        import logging
+
+        log = logging.getLogger(__name__)
+        log.warning(
+            "build_job_events: DB unreachable (%s) — serving from cache for job %s", exc, job_id
+        )
+        key = _cache_key(str(tenant.id), job_id)
+        entry = _JOB_EVENTS_CACHE.get(key)
+        if entry is not None:
+            ts, ev = entry
+            if time.monotonic() - ts <= _CACHE_TTL_S:
+                return ev
+            del _JOB_EVENTS_CACHE[key]
+        return None
+
+
+def _build_job_events_from_db(
+    db: Session,
+    *,
+    tenant: Tenant,
+    job_id: uuid.UUID,
+) -> JobEventsView | None:
+    """Execute the DB queries for the events view."""
     job = db.execute(
         select(Job).where(Job.id == job_id, Job.tenant_id == tenant.id)
     ).scalar_one_or_none()
@@ -207,7 +340,7 @@ def build_job_events(
 
     revision = counts.get("usage_events", 0)
 
-    return JobEventsView(
+    events = JobEventsView(
         job_id=str(job.id),
         status=job.status,
         revision=revision,
@@ -215,6 +348,10 @@ def build_job_events(
         last_event_type=latest[1] if latest else None,
         counts=counts,
     )
+    # Populate cache for Postgres-fallback availability
+    key = _cache_key(str(tenant.id), job_id)
+    _JOB_EVENTS_CACHE[key] = (time.monotonic(), events)
+    return events
 
 
 # --- internal helpers -----------------------------------------------------

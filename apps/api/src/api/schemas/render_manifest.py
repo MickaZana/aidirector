@@ -26,13 +26,12 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from api.schemas.director_plan import (
     AspectRatio,
-    CaptionStyle,
     CropStrategy,
     PlatformTarget,
     RenderStyle,
 )
 
-RENDER_MANIFEST_VERSION = "1"
+RENDER_MANIFEST_VERSION = "2"  # bumped: added title + subtitle_uri fields
 
 Renderer = Literal[
     "ffmpeg_basic",
@@ -95,6 +94,14 @@ class RenderManifest(BaseModel):
     crop_mode: CropStrategy
     watermark: bool = True
     normalize_audio: bool = True
+
+    # --- burn-in overlays (optional) -----------------------------------
+    # title is rendered as a top-of-frame banner via ffmpeg drawtext.
+    title: str | None = None
+    # subtitle_uri is an absolute path to an .srt; burned via the
+    # `subtitles=` filter. None means caller didn't request burned captions
+    # even if caption_mode != "off".
+    subtitle_uri: str | None = None
 
     # --- artifact naming -----------------------------------------------
     filename_template: str

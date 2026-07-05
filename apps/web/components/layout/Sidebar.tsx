@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Activity,
+  BookOpen,
   Clapperboard,
   Film,
   LayoutGrid,
@@ -19,6 +20,7 @@ const NAV = [
   { href: "/app/clips", label: "Clips Board", icon: LayoutGrid },
   { href: "/app/director", label: "Director Review", icon: Sparkles },
   { href: "/app/renders", label: "Render Center", icon: Film },
+  { href: "/app/templates", label: "Brief Templates", icon: BookOpen },
   { href: "/app/performance", label: "Performance", icon: LineChart },
 ];
 

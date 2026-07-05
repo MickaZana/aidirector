@@ -28,12 +28,25 @@ class Settings(BaseSettings):
     stripe_meter_asr_minutes: str = ""
     stripe_meter_gpu_seconds: str = ""
     stripe_meter_export_count: str = ""
+    stripe_price_pro: str = ""
+    stripe_price_studio: str = ""
+
+    allowed_origins: list[str] = ["http://localhost:3000"]
 
     anthropic_api_key: str = ""
     deepgram_api_key: str = ""
 
     sentry_dsn: str = ""
     logfire_token: str = ""
+
+    provenance_signing_key_b64: str = ""
+    provenance_key_id: str = "default-v1"
+
+    # Feature flags (Sprint 2)
+    ff_use_modal_workers: bool = False
+    ff_enable_llm_enrichment: bool = False
+    ff_enforce_quotas: bool = True
+    ff_show_fixture_data: bool = False
 
 
 @lru_cache

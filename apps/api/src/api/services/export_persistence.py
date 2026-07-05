@@ -1,16 +1,20 @@
 """Persist ExportArtifact rows + emit lifecycle usage events.
 
+Also records Stripe meter events for exports (Sprint 3 metered billing).
+
 Used by:
 - workers.export_worker (after r2 upload + builder)
 - the phase-6 probe (drives the same path without Modal)
 
 Lifecycle:
-  1. `persist_export_artifact(...)` → INSERT exports row (status=uploaded
-     if storage_uri verified, else pending), emit EXPORT_CREATED.
-  2. `mark_export_failed(...)` → UPDATE status=failed, emit JOB_FAILED.
+   1. `persist_export_artifact(...)` → INSERT exports row (status=uploaded
+      if storage_uri verified, else pending), emit EXPORT_CREATED.
+   2. `mark_export_failed(...)` → UPDATE status=failed, emit JOB_FAILED.
 """
+
 from __future__ import annotations
 
+import logging
 import uuid
 from datetime import datetime, timezone
 
@@ -26,6 +30,8 @@ from api.models import (
 from api.services.export_artifact_builder import ExportArtifactInputs
 from api.services.state_transitions import transition
 from api.services.usage_events import emit_usage_event
+
+log = logging.getLogger(__name__)
 
 
 def persist_export_artifact(
@@ -75,6 +81,15 @@ def persist_export_artifact(
             "filename": inputs.filename,
         },
     )
+
+    # Record Stripe meter event for export (fire-and-forget)
+    try:
+        from api.services.billing import record_meter_for_tenant
+
+        record_meter_for_tenant(db, str(job.tenant_id), "export", quantity=1)
+    except Exception:
+        log.exception("export_persistence: failed to record Stripe meter for export")
+
     return row
 
 

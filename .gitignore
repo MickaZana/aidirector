@@ -78,3 +78,13 @@ apps/api/_probe_phase6_fixtures/
 apps/api/_probe_phase7_fixtures/
 apps/api/_probe_phase8_fixtures/
 apps/api/_local_storage/
+
+# Windows device files
+nul
+CON
+PRN
+AUX
+COM1
+COM2
+LPT1
+LPT2

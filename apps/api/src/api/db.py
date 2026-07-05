@@ -10,7 +10,18 @@ __all__ = ["Base", "get_db", "engine", "SessionLocal"]
 
 
 _settings = get_settings()
-engine = create_engine(_settings.database_url, pool_pre_ping=True) if _settings.database_url else None
+engine = (
+    create_engine(
+        _settings.database_url,
+        pool_pre_ping=True,
+        pool_size=10,
+        max_overflow=20,
+        pool_timeout=30,
+        pool_recycle=1800,
+    )
+    if _settings.database_url
+    else None
+)
 SessionLocal = (
     sessionmaker(bind=engine, autoflush=False, expire_on_commit=False) if engine else None
 )
