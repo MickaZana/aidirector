@@ -18,6 +18,7 @@ boundary means:
 Versioning: bump `RENDER_MANIFEST_VERSION` when this schema changes;
 backfill via migration.
 """
+
 from __future__ import annotations
 
 from typing import Annotated, Literal
@@ -93,6 +94,23 @@ class RenderManifest(BaseModel):
     caption_mode: CaptionMode
     crop_mode: CropStrategy
     watermark: bool = True
+    watermark_text: str | None = None
+    """Custom visible watermark text. If None, defaults to 'aidirector'.
+
+    Set per tenant via director_plan Variant.watermark_config or from
+    tenant settings at job creation time. Overrides the hardcoded default.
+    """
+    watermark_position: str = "bottom-right"
+    """Watermark position: 'bottom-right', 'bottom-left', 'top-right',
+    'top-left'. Defaults to bottom-right for brand-safe placement."""
+    watermark_forensic: bool = True
+    """Enable invisible forensic watermark embedding.
+
+    When True (default), a luminance-based forensic watermark encoding
+    tenant_id + clip_id + timestamp is embedded after the render step.
+    Detection is possible via the forensic watermark endpoint even after
+    re-encoding or screen recording.
+    """
     normalize_audio: bool = True
 
     # --- burn-in overlays (optional) -----------------------------------

@@ -1,0 +1,16 @@
+# API-specific exclusions
+
+# Local uploads and temporary storage
+_local_storage/
+
+# Schema probe artifacts
+_probe_*.out
+_probe_*.db
+_probe_phase*_fixtures/
+aidirector_probe.db
+
+# Alembic merge conflict leftovers
+alembic/versions/*.pyc
+
+# Local test artifacts
+__pycache__/

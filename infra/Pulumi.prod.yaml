@@ -1,0 +1,11 @@
+config:
+  aidirector-infra:environment: production
+  aidirector-infra:r2_bucket_name: aidirector-prod
+  aidirector-infra:r2_public_url: https://media.aidirector.app
+  aidirector-infra:vercel_project_name: aidirector
+  aidirector-infra:github_repository: winmican26-cmyk/aidirector
+
+  # Set these via `pulumi config set`:
+  #   pulumi config set cloudflare:apiToken --secret
+  #   pulumi config set vercel:token --secret
+  #   pulumi config set github:token --secret

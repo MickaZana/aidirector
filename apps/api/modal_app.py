@@ -209,17 +209,17 @@ def run_scene_analysis(payload: dict) -> dict:
             transition(db, job, JobStatus.SUCCEEDED.value, reason="scene_analysis_complete")
             db.commit()
 
-            # 4. Auto-enqueue render for each selected clip
-            for clip in selected:
-                queue_for("render-cpu").enqueue(
-                    "workers.render_worker.execute_render_job",
-                    {
-                        "job_id": job_id,
-                        "source_uri": source_key,
-                    },
-                    job_timeout=600,
-                    result_ttl=86400,
-                )
+            # 4. Auto-enqueue ONE render job — execute_render_job reads
+            #    the entire DirectorPlan from DB and batch-processes all manifests.
+            queue_for("render-cpu").enqueue(
+                "workers.render_worker.execute_render_job",
+                {
+                    "job_id": job_id,
+                    "source_uri": source_key,
+                },
+                job_timeout=600,
+                result_ttl=86400,
+            )
             log.info(
                 "scene_analysis: job=%s complete; %d clips queued for render", job_id, len(selected)
             )
@@ -419,6 +419,61 @@ def run_render(payload: dict) -> dict:
     return execute_render_job(payload)
 
 
+@app.function(
+    secrets=_modal_secrets,
+    timeout=900,
+    memory=8192,
+    retries=modal.Retries(max_retries=1, backoff_coefficient=1.0),
+)
+def run_render_batch(payloads: list[dict]) -> list[dict]:
+    """Execute multiple FFmpeg render jobs in parallel across Modal containers.
+
+    Uses Modal's native .starmap() for true container-level parallelism.
+    Each payload in the list becomes its own Modal container invocation,
+    sharing no filesystem or memory — ideal for CPU-bound FFmpeg renders.
+
+    Usage (from a cron or enqueue path):
+        from api.modal_app import run_render_batch
+        results = run_render_batch.remote([payload1, payload2, ...])
+
+    Returns a list of result dicts, one per payload, in the same order.
+    """
+    import sys
+    from pathlib import Path
+
+    src = Path(__file__).resolve().parent / "src"
+    if str(src) not in sys.path:
+        sys.path.insert(0, str(src))
+
+    from workers.render_worker import execute_render_job
+
+    # Use Modal's .starmap() for true container-level parallelism.
+    # Each payload runs in its own Modal container with isolated
+    # CPU/memory — no GIL contention, no shared tmp dirs.
+    results = list(
+        run_render.starmap(
+            [(p,) for p in payloads],
+            return_exceptions=True,
+        )
+    )
+
+    # Convert exceptions to structured error dicts
+    output: list[dict] = []
+    for payload, result in zip(payloads, results):
+        if isinstance(result, Exception):
+            output.append(
+                {
+                    "job_id": payload.get("job_id", "unknown"),
+                    "status": "error",
+                    "error": str(result),
+                }
+            )
+        else:
+            output.append(result)
+
+    return output
+
+
 # ---------------------------------------------------------------------------
 # RQ bridge crons
 # ---------------------------------------------------------------------------
@@ -471,3 +526,77 @@ def drain_cv_queue() -> None:
     import logging
 
     _drain_queue("rq:queue:q:cv", run_scene_analysis, logging.getLogger(__name__))
+
+
+# ---------------------------------------------------------------------------
+# DSR pending-deletion cron (S6.4)
+# ---------------------------------------------------------------------------
+
+
+@app.function(
+    secrets=_modal_secrets,
+    timeout=120,
+    schedule=modal.Cron("0 4 * * *"),  # daily at 4:00 AM (after retention)
+)
+def execute_dsr_pending_deletions() -> None:
+    """Execute GDPR DSR pending deletions whose grace period has expired.
+
+    Runs daily at 4 AM UTC. Hard-deletes tenants that requested deletion
+    more than 30 days ago, after cleaning up their R2 objects.
+
+    For a dry-run, set env APPLY_DSR_DRY_RUN=true on this function.
+    """
+    import logging
+    import os
+
+    from api.db import SessionLocal
+    from api.services.dsr import execute_pending_deletions
+
+    log = logging.getLogger(__name__)
+    dry_run = os.environ.get("APPLY_DSR_DRY_RUN", "false").lower() == "true"
+
+    log.info("dsr_cron: starting dry_run=%s", dry_run)
+    with SessionLocal() as db:
+        results = execute_pending_deletions(db, dry_run=dry_run)
+        db.commit()
+        log.info(
+            "dsr_cron: complete total=%d dry_run=%s",
+            len(results),
+            dry_run,
+        )
+
+
+# ---------------------------------------------------------------------------
+# Retention policy cron (S6.2d)
+# ---------------------------------------------------------------------------
+
+
+@app.function(
+    secrets=_modal_secrets,
+    timeout=120,
+    schedule=modal.Cron("0 3 * * *"),  # daily at 3:00 AM
+)
+def apply_retention_daily() -> None:
+    """Daily retention policy enforcement.
+
+    Runs daily at 3 AM UTC. Expires jobs older than RETENTION_DAYS
+    (default 90) and deletes their associated R2 objects.
+
+    For a dry-run, set env APPLY_RETENTION_DRY_RUN=true on this function.
+    """
+    import logging
+    import os
+
+    from api.services.retention import apply_retention_policy
+
+    log = logging.getLogger(__name__)
+    dry_run = os.environ.get("APPLY_RETENTION_DRY_RUN", "false").lower() == "true"
+
+    log.info("retention_cron: starting dry_run=%s", dry_run)
+    result = apply_retention_policy(dry_run=dry_run)
+    log.info(
+        "retention_cron: complete jobs_expired=%d r2_keys_deleted=%d errors=%s",
+        result.jobs_expired,
+        result.r2_keys_deleted,
+        result.errors,
+    )

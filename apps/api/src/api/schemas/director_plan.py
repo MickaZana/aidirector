@@ -11,6 +11,7 @@ renderer pipeline at dispatch time (see `intel.render_plan_adapter`).
 Versioning: when this schema changes, bump `DIRECTOR_PLAN_VERSION` and write a
 migration that backfills the version on existing rows.
 """
+
 from __future__ import annotations
 
 from typing import Literal
@@ -38,6 +39,23 @@ RenderStyle = Literal[
 AspectRatio = Literal["9:16", "1:1", "16:9"]
 
 
+class WatermarkConfig(BaseModel):
+    """Per-variant watermark configuration.
+
+    Fields can be overridden by tenant-level settings at job creation time.
+    When a field is None, the system default is used.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    text: str | None = None
+    """Visible watermark text. None → default 'aidirector'."""
+    position: str = "bottom-right"
+    """One of 'bottom-right', 'bottom-left', 'top-right', 'top-left'."""
+    forensic: bool = True
+    """Enable invisible forensic watermark embedding."""
+
+
 class Variant(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -47,6 +65,7 @@ class Variant(BaseModel):
     duration_cap: int = Field(ge=1, le=600)
     caption_safe_zone: bool = True
     watermark: bool = True
+    watermark_config: WatermarkConfig | None = None
 
 
 class SelectedCandidate(BaseModel):
@@ -70,6 +89,7 @@ class SelectedCandidate(BaseModel):
 
 class DirectorPlan(BaseModel):
     """The full plan for a single upload/job."""
+
     model_config = ConfigDict(extra="forbid")
 
     version: str = DIRECTOR_PLAN_VERSION
@@ -84,6 +104,7 @@ class DirectorPlan(BaseModel):
 
 class RenderResult(BaseModel):
     """What a renderer worker writes back when finished."""
+
     model_config = ConfigDict(extra="forbid")
 
     variant_id: str

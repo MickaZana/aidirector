@@ -3,6 +3,7 @@
 All models inherit from `Base` so `target_metadata = Base.metadata` in
 `alembic/env.py` picks them up for autogeneration.
 """
+
 from api.models.base import Base, TimestampMixin
 from api.models.tenancy import Tenant, User
 from api.models.pipeline import (
@@ -28,6 +29,7 @@ from api.models.performance import (
 from api.models.ranking import RankingSnapshot
 from api.models.usage import UsageEvent, UsageEventType
 from api.models.brief_templates import BriefTemplate
+from api.models.corrections import PlanCorrection
 
 __all__ = [
     "Base",
@@ -55,4 +57,5 @@ __all__ = [
     "UsageEvent",
     "UsageEventType",
     "BriefTemplate",
+    "PlanCorrection",
 ]

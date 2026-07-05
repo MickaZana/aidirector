@@ -3,6 +3,7 @@
 Every row is tenant-scoped. JSON columns store the OmegaClips signal payloads
 and director plan output without leaking schema details into Postgres columns.
 """
+
 from __future__ import annotations
 
 import enum
@@ -30,6 +31,8 @@ class JobStatus(str, enum.Enum):
     FAILED = "failed"
     CANCELLED = "cancelled"
     RETRYING = "retrying"
+    EXPIRED = "expired"
+    """Marked for deletion by retention policy. Kept briefly for audit."""
 
 
 class RenderJobStatus(str, enum.Enum):
@@ -81,9 +84,7 @@ class Job(Base, TimestampMixin):
         Uuid, ForeignKey("uploads.id", ondelete="CASCADE"), nullable=False
     )
     intent: Mapped[str] = mapped_column(String(32), nullable=False, default="analyze")
-    status: Mapped[str] = mapped_column(
-        String(16), nullable=False, default=JobStatus.QUEUED.value
-    )
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default=JobStatus.QUEUED.value)
     omegaclips_job_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     intel_submodule_sha: Mapped[str | None] = mapped_column(String(40), nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -95,6 +96,22 @@ class Job(Base, TimestampMixin):
     started_at: Mapped[datetime | None] = mapped_column(nullable=True)
     heartbeat_at: Mapped[datetime | None] = mapped_column(nullable=True)
     retry_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # --- Sprint 5.4: pipeline timing -----------------------------------
+    pipeline_timing: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    """Per-stage timing breakdown. Shape:
+    {
+      "analysis_started": "ISO8601",
+      "analysis_completed": "ISO8601",
+      "director_plan_started": "ISO8601",
+      "director_plan_completed": "ISO8601",
+      "render_batch_started": "ISO8601",
+      "render_batch_completed": "ISO8601",
+      "render_count": 6,
+      "render_parallel_count": 6,
+      "render_total_elapsed_s": 45.2,
+      "render_max_elapsed_s": 12.3,
+      "total_pipeline_s": 142.1,
+    }"""
 
 
 class Scene(Base, TimestampMixin):
@@ -209,9 +226,7 @@ class RenderJob(Base, TimestampMixin):
 
 class RenderOutput(Base, TimestampMixin):
     __tablename__ = "render_outputs"
-    __table_args__ = (
-        Index("ix_render_outputs_render_job_id", "render_job_id"),
-    )
+    __table_args__ = (Index("ix_render_outputs_render_job_id", "render_job_id"),)
 
     id: Mapped[uuid.UUID] = uuid_pk()
     render_job_id: Mapped[uuid.UUID] = mapped_column(

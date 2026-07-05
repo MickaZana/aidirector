@@ -88,3 +88,8 @@ COM1
 COM2
 LPT1
 LPT2
+
+# Pulumi local state
+infra/state/
+infra/bin/
+

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { Cloud, FileVideo, Sparkles, Trash2, Zap } from "lucide-react";
 import { Surface } from "@/design-system/Surface";
@@ -14,6 +14,8 @@ import {
   type UploadState,
 } from "@/services/state-machines/upload-machine";
 import { useUploadQueue, type QueueEntry } from "@/stores/upload-queue";
+import { processUpload } from "@/services/upload-service";
+import { useApi } from "@/lib/api/runtime";
 
 const SPORTS = [
   { id: "football", label: "Football", emoji: "⚽" },
@@ -30,8 +32,10 @@ const PLATFORMS = [
 ];
 
 export function UploadStudio() {
+  const { endpoints, mode } = useApi();
   const enqueue = useUploadQueue((s) => s.enqueue);
   const entries = useUploadQueue((s) => s.entries);
+  const dispatch = useUploadQueue((s) => s.dispatch);
   const clearCompleted = useUploadQueue((s) => s.clearCompleted);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -53,6 +57,7 @@ export function UploadStudio() {
         enqueue({
           fileName: file.name,
           fileSize: file.size,
+          file,
           sport,
           platformTargets: platforms,
         }),
@@ -60,6 +65,36 @@ export function UploadStudio() {
     },
     [enqueue, sport, platforms],
   );
+
+  // ── Auto-process idle entries ───────────────────────────────────────
+  const processingRef = useRef(false);
+  useEffect(() => {
+    if (!endpoints || mode !== "live") return;
+    if (processingRef.current) return;
+
+    const idleEntry = entries.find(
+      (e) => e.snapshot.state === "idle" && e.file,
+    );
+    if (!idleEntry) return;
+
+    processingRef.current = true;
+
+    // Transition idle → selecting, then start the pipeline
+    dispatch(idleEntry.id, {
+      type: "FILE_SELECTED",
+      file: idleEntry.file!,
+    });
+
+    processUpload(
+      endpoints,
+      idleEntry.id,
+      idleEntry.file!,
+      idleEntry.sport,
+      dispatch,
+    ).finally(() => {
+      processingRef.current = false;
+    });
+  }, [endpoints, mode, entries, dispatch]);
 
   return (
     <div className="px-6 lg:px-8 py-8 space-y-8">

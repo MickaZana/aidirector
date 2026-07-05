@@ -69,6 +69,11 @@ export default withSentryConfig(nextConfig, {
   authToken: process.env.SENTRY_AUTH_TOKEN,
   widenClientFileUpload: true,
   sourcemaps: { disable: false },
-  disableLogger: true,
-  automaticVercelMonitors: false,
+  // Replaces deprecated `disableLogger` — treeshake debug logs at build time
+  webpack: {
+    treeshake: {
+      removeDebugLogging: true,
+    },
+    automaticVercelMonitors: false,
+  },
 });

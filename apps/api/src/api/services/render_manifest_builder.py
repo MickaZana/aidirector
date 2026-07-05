@@ -14,6 +14,7 @@ Outputs are individually validated against the renderer registry; invalid
 manifests are excluded (with reasons in `unrenderable`) rather than thrown,
 so a partial plan can still ship the renderable variants.
 """
+
 from __future__ import annotations
 
 import uuid
@@ -93,9 +94,7 @@ def build_manifests(
                 continue
             manifests.append(manifest)
 
-    return ManifestBuildResult(
-        manifests=tuple(manifests), unrenderable=tuple(unrenderable)
-    )
+    return ManifestBuildResult(manifests=tuple(manifests), unrenderable=tuple(unrenderable))
 
 
 # --- Internals --------------------------------------------------------------
@@ -130,6 +129,13 @@ def _build_one(
     caption_mode = _caption_mode_for_style(candidate.caption_style, renderer)
     crop_mode = _crop_mode_for_renderer(candidate.crop_strategy, renderer)
     watermark = variant.watermark and "watermark" in cap.capabilities
+    watermark_text: str | None = None
+    watermark_position: str = "bottom-right"
+    watermark_forensic: bool = True
+    if variant.watermark_config:
+        watermark_text = variant.watermark_config.text
+        watermark_position = variant.watermark_config.position
+        watermark_forensic = variant.watermark_config.forensic
     normalize_audio = "normalize_audio" in cap.capabilities
     filename = filename_for(variant.platform, tenant_slug, candidate.candidate_id)
 
@@ -170,6 +176,9 @@ def _build_one(
         caption_mode=caption_mode,
         crop_mode=crop_mode,
         watermark=watermark,
+        watermark_text=watermark_text,
+        watermark_position=watermark_position,
+        watermark_forensic=watermark_forensic,
         normalize_audio=normalize_audio,
         title=title,
         subtitle_uri=subtitle_uri,

@@ -1,4 +1,5 @@
 """Exports router — presigned download URLs with provenance headers."""
+
 from __future__ import annotations
 
 import logging
@@ -75,6 +76,7 @@ def get_export_url(
     # Attach provenance headers + write C2PA sidecar if signing is configured
     try:
         from api.schemas.provenance_manifest import RenderAssertion
+
         signer = ProvSigner.from_env()
 
         assertion = RenderAssertion(
@@ -92,11 +94,13 @@ def get_export_url(
         # Store .c2pa.json sidecar alongside the clip in R2
         sidecar_key = key.rsplit(".", 1)[0] + ".c2pa.json"
         import json
+
         sidecar_bytes = json.dumps(manifest.model_dump(mode="json"), indent=2).encode()
         try:
             import io
             from api.config import get_settings
             import boto3
+
             _s = get_settings()
             _client = boto3.client(
                 "s3",
@@ -110,12 +114,27 @@ def get_export_url(
                 Body=sidecar_bytes,
                 ContentType="application/json",
             )
-            response.headers["X-Provenance-Manifest-Url"] = r2.signed_get_url(sidecar_key, expires_s=3600)
+            response.headers["X-Provenance-Manifest-Url"] = r2.signed_get_url(
+                sidecar_key, expires_s=3600
+            )
         except Exception as sidecar_exc:
             log.debug("exports: sidecar upload skipped: %s", sidecar_exc)
 
         response.headers["X-Provenance-Key-Id"] = signer.key_id
         response.headers["X-Provenance-Public-Key"] = signer.public_key_b64()
+
+        # C2PA v2.3: X-Content-Credential header (per C2PA spec)
+        # Points to the DID document which contains the public key material
+        # consumers need to verify the Content Credentials.
+        if signer.credential_url:
+            response.headers["X-Content-Credential"] = signer.credential_url
+
+        # C2PA v2.3: X-Content-Credential-DID header (proprietary extension)
+        # Provides the DID directly so consumers can resolve without fetching
+        # the credential document first.
+        if signer.did:
+            response.headers["X-Content-Credential-DID"] = signer.did
+
         log.info("exports: provenance headers + sidecar written for output %s", render_output_id)
     except Exception:
         log.debug("exports: provenance signing not configured — skipping headers")

@@ -342,9 +342,22 @@ def _build_ffmpeg_command(ffmpeg: str, manifest: RenderManifest, output_path: Pa
         )
 
     if has_watermark:
-        # Tiny corner watermark; deterministic content + position.
+        # Configurable watermark text and position.
+        wm_text = manifest.watermark_text or "aidirector"
+        wm_pos = manifest.watermark_position
+        if wm_pos == "bottom-right":
+            wm_x, wm_y = "w-tw-10", "h-th-10"
+        elif wm_pos == "bottom-left":
+            wm_x, wm_y = "10", "h-th-10"
+        elif wm_pos == "top-right":
+            wm_x, wm_y = "w-tw-10", "10"
+        elif wm_pos == "top-left":
+            wm_x, wm_y = "10", "10"
+        else:
+            wm_x, wm_y = "w-tw-10", "h-th-10"
         vfilters.append(
-            "drawtext=text='aidirector':fontcolor=white@0.6:fontsize=14:x=w-tw-10:y=h-th-10"
+            f"drawtext=text='{_drawtext_escape(wm_text)}':"
+            f"fontcolor=white@0.6:fontsize=14:x={wm_x}:y={wm_y}"
         )
 
     afilters: list[str] = []

@@ -1,0 +1,5 @@
+name: aidirector-infra
+description: Infrastructure-as-Code for AI Director — Cloudflare R2, Vercel, GitHub secrets
+runtime: nodejs
+backend:
+  url: file://state

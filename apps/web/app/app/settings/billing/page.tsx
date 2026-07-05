@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ExternalLink, Zap, Film, ArrowRight } from "lucide-react";
 import { TopBar } from "@/components/layout/TopBar";
 import { useApi } from "@/lib/api/runtime";
+import { toast } from "@/stores/toast-store";
 
 interface UsageData {
   plan: string;
@@ -32,14 +33,24 @@ const PLAN_COLORS: Record<string, string> = {
 };
 
 export default function BillingPage() {
-  const { endpoints, mode } = useApi();
+  const { baseUrl, mode } = useApi();
   const [usage, setUsage] = useState<UsageData | null>(null);
   const [subscription, setSubscription] = useState<SubscriptionData | null>(null);
   const [portalLoading, setPortalLoading] = useState(false);
   const [loading, setLoading] = useState(true);
 
+  const apiFetch = useCallback(async function <T>(path: string): Promise<T | null> {
+    try {
+      const res = await fetch(`${baseUrl}${path}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return res.json() as Promise<T>;
+    } catch {
+      return null;
+    }
+  }, [baseUrl]);
+
   useEffect(() => {
-    if (mode === "fixtures" || !endpoints) {
+    if (mode === "fixtures" || !baseUrl) {
       setUsage({ plan: "starter", matches_used: 2, matches_limit: 5, exports_used: 6, current_period_end: null });
       setSubscription({ plan: "starter", status: "active", current_period_end: null });
       setLoading(false);
@@ -47,28 +58,27 @@ export default function BillingPage() {
     }
 
     Promise.all([
-      fetch("/api/billing/usage", { headers: endpoints ? {} : {} }).then((r) => r.json()),
-      fetch("/api/billing/subscription").then((r) => r.json()),
+      apiFetch<UsageData>("/api/billing/usage"),
+      apiFetch<SubscriptionData>("/api/billing/subscription"),
     ])
       .then(([u, s]) => {
-        setUsage(u);
-        setSubscription(s);
-      })
-      .catch(() => {
-        setUsage({ plan: "starter", matches_used: 0, matches_limit: 5, exports_used: 0, current_period_end: null });
-        setSubscription({ plan: "starter", status: "active", current_period_end: null });
+        setUsage(u ?? { plan: "starter", matches_used: 0, matches_limit: 5, exports_used: 0, current_period_end: null });
+        setSubscription(s ?? { plan: "starter", status: "active", current_period_end: null });
       })
       .finally(() => setLoading(false));
-  }, [endpoints, mode]);
+  }, [baseUrl, mode, apiFetch]);
 
   async function openPortal() {
     setPortalLoading(true);
     try {
-      const res = await fetch("/api/billing/portal");
-      const { url } = await res.json();
-      window.open(url, "_blank");
+      const data = await apiFetch<{ url: string }>("/api/billing/portal");
+      if (data?.url) {
+        window.open(data.url, "_blank");
+      } else {
+        toast.error("Billing portal unavailable", "Please try again later.");
+      }
     } catch {
-      alert("Could not open billing portal. Please try again.");
+      toast.error("Could not open billing portal", "Please try again.");
     } finally {
       setPortalLoading(false);
     }

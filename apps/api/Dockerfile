@@ -41,7 +41,13 @@ ENV PATH="/app/.venv/bin:$PATH" \
     # Point drawtext to Liberation Sans (installed above)
     FFMPEG_DRAWTEXT_FONT="/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf"
 
+# Create non-root user for security
+RUN groupadd -r aidirector && useradd -r -g aidirector -d /app -s /sbin/nologin aidirector \
+    && chown -R aidirector:aidirector /app
+
 EXPOSE 8000
+
+USER aidirector
 
 # Default: run the FastAPI app.
 # Override CMD to run alembic migrations or the RQ worker.

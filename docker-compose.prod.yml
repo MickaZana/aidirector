@@ -1,0 +1,74 @@
+# Production overlay for docker-compose.
+#
+# Augments docker-compose.yml for production deployment. Excludes local
+# postgres/redis (use Neon + Upstash instead). Adds resource limits,
+# logging drivers, and production-grade restart policies.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# Environment variables are loaded from .env.production (gitignored):
+#   cp .env.example .env.production && vim .env.production
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env.production up -d
+
+services:
+  api:
+    # Override build args for a tagged production image
+    image: aidirector/api:${TAG:-latest}
+    build:
+      args:
+        - BUILDKIT_INLINE_CACHE=1
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: "2G"
+        reservations:
+          cpus: "0.5"
+          memory: "512M"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    # Production env vars come from .env.production (gitignored)
+    env_file:
+      - .env.production
+    environment:
+      ENV: production
+      # Point to external Neon Postgres + Upstash Redis (set in .env.production)
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: ${REDIS_URL}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request, sys; r=urllib.request.urlopen('http://localhost:8000/health'); sys.exit(0 if r.status==200 else 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    ports:
+      - "${API_PORT:-8000}:8000"
+
+  worker:
+    image: aidirector/api:${TAG:-latest}
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: "4"
+          memory: "4G"
+        reservations:
+          cpus: "1"
+          memory: "1G"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    env_file:
+      - .env.production
+    environment:
+      ENV: production
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: ${REDIS_URL}
+    command: ["rq", "worker", "--url", "${REDIS_URL}", "q:render-cpu", "q:cv", "q:llm", "q:export"]

@@ -123,4 +123,8 @@ export class ApiClient {
       body: JSON.stringify(body),
     });
   }
+
+  delete<T = void>(path: string) {
+    return this.request<T>(path, { method: "DELETE" });
+  }
 }

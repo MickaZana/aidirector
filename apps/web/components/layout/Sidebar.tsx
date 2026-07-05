@@ -9,6 +9,7 @@ import {
   Film,
   LayoutGrid,
   LineChart,
+  Settings,
   Sparkles,
   Upload,
 } from "lucide-react";
@@ -22,6 +23,10 @@ const NAV = [
   { href: "/app/renders", label: "Render Center", icon: Film },
   { href: "/app/templates", label: "Brief Templates", icon: BookOpen },
   { href: "/app/performance", label: "Performance", icon: LineChart },
+];
+
+const NAV_BOTTOM = [
+  { href: "/app/settings/billing", label: "Settings", icon: Settings },
 ];
 
 export function Sidebar() {
@@ -70,6 +75,37 @@ export function Sidebar() {
               {item.accent && !active && (
                 <span className="ml-auto h-1.5 w-1.5 rounded-full bg-[color:var(--color-accent-green)] shadow-[0_0_8px_rgba(0,230,161,0.7)]" />
               )}
+            </Link>
+          );
+        })}
+      </nav>
+
+      {/* Bottom nav */}
+      <nav className="px-3 py-2 border-t border-[color:var(--color-border-soft)]">
+        {NAV_BOTTOM.map((item) => {
+          const active = pathname?.startsWith(item.href) ?? false;
+          const Icon = item.icon;
+          return (
+            <Link
+              key={item.href}
+              href={item.href as never}
+              className={cn(
+                "group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium tracking-tight transition-colors duration-[var(--motion-fast)]",
+                active
+                  ? "bg-[color:var(--color-surface-2)] text-[color:var(--color-text-primary)] shadow-[inset_0_0_0_1px_var(--color-border-accent)]"
+                  : "text-[color:var(--color-text-secondary)] hover:bg-[color:var(--color-surface-2)]/60 hover:text-[color:var(--color-text-primary)]",
+              )}
+            >
+              <Icon
+                className={cn(
+                  "h-4 w-4 shrink-0 transition-colors",
+                  active
+                    ? "text-[color:var(--color-accent-green)]"
+                    : "text-[color:var(--color-text-tertiary)] group-hover:text-[color:var(--color-text-secondary)]",
+                )}
+                strokeWidth={2}
+              />
+              <span>{item.label}</span>
             </Link>
           );
         })}

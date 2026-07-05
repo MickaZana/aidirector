@@ -150,17 +150,17 @@ def build_director_plan(job_id: str, tenant_slug: str) -> dict:
         upload = db.execute(select(Upload).where(Upload.id == job.upload_id)).scalar_one_or_none()
         source_uri = upload.r2_key if upload else str(job.upload_id)
 
-        # Enqueue render for each variant in the plan
-        for candidate in plan.selected_candidates:
-            queue_for("render-cpu").enqueue(
-                "workers.render_worker.execute_render_job",
-                {
-                    "job_id": job_id,
-                    "source_uri": source_uri,
-                },
-                job_timeout=600,
-                result_ttl=86400,
-            )
+        # Enqueue ONE render job — execute_render_job already reads the
+        # entire DirectorPlan from DB and renders ALL manifests in batch.
+        queue_for("render-cpu").enqueue(
+            "workers.render_worker.execute_render_job",
+            {
+                "job_id": job_id,
+                "source_uri": source_uri,
+            },
+            job_timeout=600,
+            result_ttl=86400,
+        )
 
         log.info(
             "build_director_plan: job=%s plan=%s candidates=%d variants=%d",

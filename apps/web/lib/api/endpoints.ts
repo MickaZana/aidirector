@@ -5,12 +5,13 @@
  */
 import type { ApiClient } from "./client";
 import type {
+  BriefTemplate,
+  BriefTemplateCreate,
   DirectorPlan,
   Job,
   JobEvents,
   JobView,
   Upload,
-  UsageEvent,
 } from "./types";
 
 export interface PresignUploadInput {
@@ -99,14 +100,65 @@ export class Endpoints {
     return this.client.get<JobEvents>(`/api/jobs/${jobId}/events`);
   }
 
-  // --- Usage / billing --------------------------------------------------
-  listUsageEvents(params?: { since?: string; type?: string }) {
-    const search = new URLSearchParams();
-    if (params?.since) search.set("since", params.since);
-    if (params?.type) search.set("type", params.type);
-    const qs = search.toString();
-    return this.client.get<UsageEvent[]>(
-      `/api/usage_events${qs ? `?${qs}` : ""}`,
-    );
+  // --- DSR (GDPR) -------------------------------------------------------
+  /**
+   * Request account deletion. Returns deletion_scheduled_for date.
+   */
+  requestDsrDeletion() {
+    return this.client.post<{
+      tenant_id: string;
+      deletion_requested_at: string;
+      deletion_scheduled_for: string;
+      grace_days: number;
+      message: string;
+    }>("/api/v1/dsr/deletion", {});
   }
+
+  /**
+   * Cancel a pending deletion request.
+   */
+  cancelDsrDeletion() {
+    return this.client.delete<{ tenant_id: string; message: string }>("/api/v1/dsr/deletion");
+  }
+
+  /**
+   * Check the status of a pending deletion request.
+   */
+  getDsrDeletionStatus() {
+    return this.client.get<{
+      tenant_id: string;
+      deletion_requested: boolean;
+      deletion_requested_at: string | null;
+      deletion_scheduled_for: string | null;
+      deletion_cancelled: boolean;
+      grace_days: number;
+      days_remaining: number | null;
+    }>("/api/v1/dsr/deletion");
+  }
+
+  /**
+   * Export all personal data (GDPR Article 20).
+   */
+  exportDsrData() {
+    return this.client.post<{
+      generated_at: string;
+      schema_version: string;
+      account: Record<string, unknown>;
+      uploads: unknown[];
+      jobs: unknown[];
+    }>("/api/v1/dsr/export", {});
+  }
+
+  // --- Brief templates ----------------------------------------------------
+  listBriefTemplates(sport?: string) {
+    const params = sport ? `?sport=${encodeURIComponent(sport)}` : "";
+    return this.client.get<BriefTemplate[]>(`/api/brief-templates${params}`);
+  }
+  createBriefTemplate(input: BriefTemplateCreate) {
+    return this.client.post<BriefTemplate>("/api/brief-templates", input);
+  }
+  deleteBriefTemplate(id: string) {
+    return this.client.delete<void>(`/api/brief-templates/${id}`);
+  }
+
 }

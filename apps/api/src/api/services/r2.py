@@ -23,6 +23,7 @@ Phase 10 additions:
     the client a time-bounded download link.
   - All operations emit an audit row via the helper, not free-form.
 """
+
 from __future__ import annotations
 
 import shutil
@@ -53,9 +54,7 @@ class UploadResult:
 
 def is_r2_configured() -> bool:
     s = get_settings()
-    return bool(
-        s.r2_account_id and s.r2_access_key_id and s.r2_secret_access_key and s.r2_bucket
-    )
+    return bool(s.r2_account_id and s.r2_access_key_id and s.r2_secret_access_key and s.r2_bucket)
 
 
 def local_mirror_path() -> Path:
@@ -195,6 +194,55 @@ def signed_get_url(key: str, *, expires_s: int = 3600) -> str:
         Params={"Bucket": s.r2_bucket, "Key": key},
         ExpiresIn=expires_s,
     )
+
+
+def delete_object(key: str) -> bool:
+    """Delete a stored object. Returns True if deleted, False if not found.
+
+    Used by the retention policy service to clean up expired clips.
+    """
+    if is_r2_configured():
+        from botocore.exceptions import ClientError
+
+        s = get_settings()
+        try:
+            _client().delete_object(Bucket=s.r2_bucket, Key=key)
+            return True
+        except ClientError as e:
+            if e.response.get("Error", {}).get("Code") in ("404", "NoSuchKey", "NotFound"):
+                return False
+            raise
+
+    # Local mode mirror
+    abs_path = local_mirror_path() / key
+    if not abs_path.exists():
+        return False
+    abs_path.unlink()
+    return True
+
+
+def get_object(key: str) -> bytes | None:
+    """Fetch a stored object's bytes. None if absent.
+
+    Used by C2PA trust anchor and DID document retrieval.
+    """
+    if is_r2_configured():
+        from botocore.exceptions import ClientError
+
+        s = get_settings()
+        try:
+            resp = _client().get_object(Bucket=s.r2_bucket, Key=key)
+            return resp["Body"].read()
+        except ClientError as e:
+            if e.response.get("Error", {}).get("Code") in ("404", "NoSuchKey", "NotFound"):
+                return None
+            raise
+
+    # Local mode mirror
+    abs_path = local_mirror_path() / key
+    if not abs_path.exists():
+        return None
+    return abs_path.read_bytes()
 
 
 def head_object(key: str) -> dict[str, Any] | None:

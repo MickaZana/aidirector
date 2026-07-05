@@ -11,6 +11,9 @@ import {
   type UploadSnapshot,
 } from "@/services/state-machines/upload-machine";
 
+/** Convenience type for the dispatch function used by upload-service. */
+export type UploadDispatchFn = (id: string, event: UploadEvent) => void;
+
 export interface QueueEntry {
   id: string;          // client-local UUID
   fileName: string;
@@ -19,6 +22,8 @@ export interface QueueEntry {
   platformTargets: string[];
   snapshot: UploadSnapshot;
   createdAt: string;
+  /** The actual File object from the user's file picker. Used by upload-service. */
+  file: File | null;
 }
 
 interface UploadQueueState {
@@ -26,6 +31,7 @@ interface UploadQueueState {
   enqueue(input: {
     fileName: string;
     fileSize: number;
+    file: File | null;
     sport: string;
     platformTargets: string[];
   }): QueueEntry;
@@ -44,6 +50,7 @@ export const useUploadQueue = create<UploadQueueState>((set) => ({
       id: localId(),
       fileName: input.fileName,
       fileSize: input.fileSize,
+      file: input.file ?? null,
       sport: input.sport,
       platformTargets: input.platformTargets,
       snapshot: INITIAL_UPLOAD_SNAPSHOT,

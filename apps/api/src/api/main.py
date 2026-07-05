@@ -17,7 +17,9 @@ from api.startup_check import check_env
 from api.routers import (
     billing,
     brief_templates,
+    c2pa,
     director_plans,
+    dsr,
     engagement,
     exports,
     health,
@@ -149,7 +151,14 @@ def create_app() -> FastAPI:
         allow_credentials=True,
         allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
         allow_headers=["Authorization", "Content-Type", "X-Request-ID", "X-Idempotency-Key"],
-        expose_headers=["X-Request-ID", "X-Provenance-Manifest-Url", "X-Provenance-Key-Id"],
+        expose_headers=[
+            "X-Request-ID",
+            "X-Provenance-Manifest-Url",
+            "X-Provenance-Key-Id",
+            "X-Provenance-Public-Key",
+            "X-Content-Credential",
+            "X-Content-Credential-DID",
+        ],
     )
     app.add_middleware(SecurityHeadersMiddleware)
     app.add_middleware(RequestIDMiddleware)
@@ -167,6 +176,8 @@ def create_app() -> FastAPI:
     app.include_router(exports.router, prefix="/api/v1")
     app.include_router(billing.router, prefix="/api/v1")
     app.include_router(engagement.router, prefix="/api/v1")
+    app.include_router(c2pa.router, prefix="/api/v1")
+    app.include_router(dsr.router, prefix="/api/v1")
     app.include_router(webhooks.router, prefix="/api/v1")
     app.include_router(ws_jobs.router)
 
@@ -179,6 +190,8 @@ def create_app() -> FastAPI:
     app.include_router(exports.router, prefix="/api")
     app.include_router(billing.router, prefix="/api")
     app.include_router(engagement.router, prefix="/api")
+    app.include_router(c2pa.router, prefix="/api")
+    app.include_router(dsr.router, prefix="/api")
     app.include_router(webhooks.router, prefix="/api")
 
     return app

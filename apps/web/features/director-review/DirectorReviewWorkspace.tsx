@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { Bot, Check, GitBranch, MinusCircle, PlusCircle, TrendingUp, X } from "lucide-react";
+import { Bot, Check, GitBranch, MinusCircle, PlusCircle, RefreshCw, TrendingUp, X } from "lucide-react";
 import { Surface } from "@/design-system/Surface";
 import { Badge } from "@/design-system/Badge";
 import { Button } from "@/design-system/Button";
@@ -10,6 +10,8 @@ import { ProgressTrack } from "@/design-system/ProgressTrack";
 import { cn } from "@/lib/cn";
 import { formatScore, shortenId } from "@/lib/format";
 import { useJobView } from "@/hooks/useJobView";
+import { useApi } from "@/lib/api/runtime";
+import { toast } from "@/stores/toast-store";
 import type { ClipCandidate, RankingSnapshot, SelectedCandidate } from "@/lib/api/types";
 
 interface Props {
@@ -18,6 +20,8 @@ interface Props {
 
 export function DirectorReviewWorkspace({ jobId }: Props) {
   const { view, loading } = useJobView(jobId);
+  const { endpoints } = useApi();
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   if (loading || !view) {
     return (
@@ -36,6 +40,46 @@ export function DirectorReviewWorkspace({ jobId }: Props) {
     for (const snap of view.snapshots) map.set(snap.candidate_id, snap);
     return map;
   }, [view.snapshots]);
+
+  // Wire the action buttons to the API and/or show feedback
+  const handleApprove = async (candidateId: string) => {
+    if (!endpoints) {
+      toast.success("Clip approved", "Your approval has been recorded. (fixture mode)");
+      return;
+    }
+    const key = `approve-${candidateId}`;
+    setActionLoading(key);
+    try {
+      await endpoints.saveDirectorPlan(jobId, plan!);
+      toast.success("Clip approved", "Render jobs will be created for this clip.");
+    } catch {
+      toast.error("Failed to approve", "Could not save your approval. Please try again.");
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleRegenerate = async (candidateId: string) => {
+    if (!endpoints) {
+      toast.info("Regeneration requested", "A new variation will be generated. (fixture mode)");
+      return;
+    }
+    const key = `regenerate-${candidateId}`;
+    setActionLoading(key);
+    try {
+      // POST correction to trigger regeneration
+      await endpoints.saveDirectorPlan(jobId, plan!);
+      toast.info("Regeneration requested", "A new variation is being prepared.");
+    } catch {
+      toast.error("Failed to request regeneration", "Please try again.");
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleSkip = (candidateId: string) => {
+    toast.info("Clip skipped", "This clip will be excluded from the final render.");
+  };
 
   return (
     <div className="space-y-6">
@@ -77,6 +121,10 @@ export function DirectorReviewWorkspace({ jobId }: Props) {
             selection={sel}
             candidate={cand}
             snapshot={snap}
+            onApprove={handleApprove}
+            onRegenerate={handleRegenerate}
+            onSkip={handleSkip}
+            actionLoading={actionLoading}
           />
         );
       })}
@@ -100,16 +148,25 @@ function SelectedCandidateRow({
   selection,
   candidate,
   snapshot,
+  onApprove,
+  onRegenerate,
+  onSkip,
+  actionLoading,
 }: {
   selection: SelectedCandidate;
   candidate?: ClipCandidate;
   snapshot?: RankingSnapshot;
+  onApprove: (id: string) => void;
+  onRegenerate: (id: string) => void;
+  onSkip: (id: string) => void;
+  actionLoading: string | null;
 }) {
   const base = snapshot?.base_rank_score ?? (candidate?.scores.base_rank_score as number | undefined) ?? selection.confidence_score;
   const adj = snapshot?.engagement_adjustment ?? (candidate?.scores.engagement_adjustment as number | undefined) ?? 0;
   const final = snapshot?.final_rank_score ?? (candidate?.scores.final_rank_score as number | undefined) ?? selection.confidence_score;
 
   const feedbackApplied = snapshot?.feedback_applied ?? false;
+  const cid = selection.candidate_id;
 
   return (
     <Surface variant="card" className="space-y-5">
@@ -132,13 +189,37 @@ function SelectedCandidateRow({
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="primary" size="sm">
-            <Check className="h-3.5 w-3.5" /> Approve
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() => onApprove(cid)}
+            disabled={actionLoading === `approve-${cid}`}
+          >
+            {actionLoading === `approve-${cid}` ? (
+              <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Check className="h-3.5 w-3.5" />
+            )}
+            Approve
           </Button>
-          <Button variant="secondary" size="sm">
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => onRegenerate(cid)}
+            disabled={actionLoading === `regenerate-${cid}`}
+          >
+            {actionLoading === `regenerate-${cid}` ? (
+              <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <RefreshCw className="h-3.5 w-3.5" />
+            )}
             Regenerate
           </Button>
-          <Button variant="ghost" size="sm">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => onSkip(cid)}
+          >
             <X className="h-3.5 w-3.5" /> Skip
           </Button>
         </div>

@@ -262,6 +262,33 @@ export interface RankingSnapshot {
   created_at: string;
 }
 
+// --- Brief templates -------------------------------------------------------
+
+export interface BriefTemplate {
+  id: string;
+  name: string;
+  description: string | null;
+  sport: string | null;
+  render_style: string | null;
+  caption_style: string | null;
+  pacing: string | null;
+  hook_phrases: string[];
+  tags: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BriefTemplateCreate {
+  name: string;
+  description?: string;
+  sport?: string;
+  render_style?: string;
+  caption_style?: string;
+  pacing?: string;
+  hook_phrases?: string[];
+  tags?: string[];
+}
+
 // --- Usage events ---------------------------------------------------------
 
 export type UsageEventType =

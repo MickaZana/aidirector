@@ -17,6 +17,7 @@ maps a small request dict → a small response dict. That allows the
 Anthropic client / model / API key / prompt caching to live entirely in the
 calling code; the adapter has no Anthropic dependency itself.
 """
+
 from __future__ import annotations
 
 from typing import Callable
@@ -44,9 +45,7 @@ WHITELISTED_FIELDS = frozenset(
 # Valid enum values per whitelisted enum field. Used to reject hallucinated
 # strings before they hit Pydantic.
 _VALID_PACING: frozenset[Pacing] = frozenset(("fast", "medium", "slow"))
-_VALID_CAPTION_STYLE: frozenset[CaptionStyle] = frozenset(
-    ("sports_hype", "minimal", "documentary")
-)
+_VALID_CAPTION_STYLE: frozenset[CaptionStyle] = frozenset(("sports_hype", "minimal", "documentary"))
 _VALID_RENDER_STYLE: frozenset[RenderStyle] = frozenset(
     ("ffmpeg_basic", "sports_hype", "documentary", "static")
 )
@@ -72,17 +71,22 @@ def enrich_director_plan(
     enabled: bool = False,
     enricher_fn: EnricherFn | None = None,
     model: str = "claude-sonnet-4-6",
+    few_shot_examples: list[dict] | None = None,
 ) -> DirectorPlan:
     """Apply optional, sandboxed enrichment to a deterministic DirectorPlan.
 
     No-op identity function unless `enabled=True` AND `enricher_fn` is
     provided. Always re-validates the result through Pydantic; if validation
     fails for any reason, the original plan is returned unchanged.
+
+    `few_shot_examples` — optional list of dicts with "role" and "content"
+    keys, for appending correction-derived learning patterns to the prompt.
+    Passed through from `correction_aggregator.build_few_shot_examples()`.
     """
     if not enabled or enricher_fn is None:
         return plan
 
-    request = _build_enrichment_request(plan)
+    request = _build_enrichment_request(plan, few_shot_examples=few_shot_examples)
     try:
         response = enricher_fn(request)
     except Exception:
@@ -101,13 +105,21 @@ def enrich_director_plan(
 # --- Internals --------------------------------------------------------------
 
 
-def _build_enrichment_request(plan: DirectorPlan) -> dict:
+def _build_enrichment_request(
+    plan: DirectorPlan,
+    few_shot_examples: list[dict] | None = None,
+) -> dict:
     """Constrained, JSON-shaped request handed to the enricher.
 
     Only fields Claude needs to do its job are exposed. Timestamps and IDs
     are read-only context (Claude must not modify them — and even if it
-    tries, the adapter's apply step refuses)."""
-    return {
+    tries, the adapter's apply step refuses).
+
+    `few_shot_examples` — optional learning-loop examples from past user
+    corrections, in the format produced by
+    `correction_aggregator.build_few_shot_examples()`.
+    """
+    request: dict = {
         "plan_version": plan.version,
         "upload_id": plan.upload_id,
         "job_id": plan.job_id,
@@ -137,10 +149,19 @@ def _build_enrichment_request(plan: DirectorPlan) -> dict:
         },
     }
 
+    if few_shot_examples:
+        request["few_shot_examples"] = few_shot_examples
+        request["learning_context"] = (
+            "The following few-shot examples show how this tenant's editor "
+            "has corrected similar plans in the past. Apply these patterns "
+            "when relevant, but do NOT override explicit user preferences "
+            "from the current request."
+        )
 
-def _apply_response(
-    plan: DirectorPlan, response: dict, *, model: str
-) -> DirectorPlan:
+    return request
+
+
+def _apply_response(plan: DirectorPlan, response: dict, *, model: str) -> DirectorPlan:
     """Apply per-candidate suggestions to a deepcopied DirectorPlan.
 
     Drops anything not whitelisted, anything beyond length limits, and
@@ -166,9 +187,7 @@ def _apply_response(
     )
 
 
-def _apply_per_candidate(
-    cand: SelectedCandidate, per: dict
-) -> SelectedCandidate:
+def _apply_per_candidate(cand: SelectedCandidate, per: dict) -> SelectedCandidate:
     updates: dict = {}
 
     if "reason_selected" in per and isinstance(per["reason_selected"], str):
@@ -188,9 +207,7 @@ def _apply_per_candidate(
     hooks = per.get("hook_options")
     if isinstance(hooks, list):
         cleaned = [
-            h.strip()
-            for h in hooks
-            if isinstance(h, str) and 0 < len(h.strip()) <= MAX_HOOK_LENGTH
+            h.strip() for h in hooks if isinstance(h, str) and 0 < len(h.strip()) <= MAX_HOOK_LENGTH
         ]
         if cleaned:
             updates["hook_options"] = cleaned[:MAX_HOOK_OPTIONS]

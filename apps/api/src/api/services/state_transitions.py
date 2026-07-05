@@ -185,22 +185,22 @@ def transition(
 
     if to == JobStatus.CANCELLED.value and force and isinstance(row, Job):
         # Admin override — explicit and audited.
-    setattr(row, attr, to)
-    _emit_audit_event(
-        db,
-        row=row,
-        kind=kind,
-        from_state=from_state,
-        to_state=to,
-        event_type=UsageEventType.TRANSITION_FORCED,
-        reason=reason,
-        worker_id=worker_id,
-    )
+        setattr(row, attr, to)
+        _emit_audit_event(
+            db,
+            row=row,
+            kind=kind,
+            from_state=from_state,
+            to_state=to,
+            event_type=UsageEventType.TRANSITION_FORCED,
+            reason=reason,
+            worker_id=worker_id,
+        )
 
-    # Publish to WebSocket event stream (fire-and-forget, best-effort)
-    _publish_event(kind, row, from_state, to_state, reason)
+        # Publish to WebSocket event stream (fire-and-forget, best-effort)
+        _publish_event(kind, row, from_state, to_state, reason)
 
-    return from_state
+        return from_state
 
     if to not in allowed:
         _emit_audit_event(
@@ -258,14 +258,17 @@ def _publish_event(
             job_id = str(row.job_id)
 
         if job_id:
-            publish_job_event(job_id, {
-                "kind": kind,
-                "row_id": str(row.id),
-                "from_state": from_state,
-                "to_state": to_state,
-                "reason": reason,
-                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
-            })
+            publish_job_event(
+                job_id,
+                {
+                    "kind": kind,
+                    "row_id": str(row.id),
+                    "from_state": from_state,
+                    "to_state": to_state,
+                    "reason": reason,
+                    "timestamp": datetime.now(tz=timezone.utc).isoformat(),
+                },
+            )
     except Exception:
         pass  # best-effort — WebSocket publishing must never block a transition
 

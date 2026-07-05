@@ -27,6 +27,21 @@ export default function JobsPage() {
           <Surface variant="card" className="text-center py-12 text-sm text-[color:var(--color-text-tertiary)]">
             Loading jobs…
           </Surface>
+        ) : jobs.length === 0 ? (
+          <Surface variant="card" className="text-center py-16">
+            <div className="text-4xl mb-4 opacity-40">▷</div>
+            <h2 className="text-lg font-medium">No pipelines yet</h2>
+            <p className="text-sm text-[color:var(--color-text-secondary)] mt-2 max-w-md mx-auto">
+              Upload your first batch of media and start a processing job. Once your pipeline runs,
+              results will appear here.
+            </p>
+            <Link
+              href="/app/upload"
+              className="inline-block mt-6 rounded-lg bg-[color:var(--color-accent)] px-5 py-2.5 text-sm font-medium text-white hover:opacity-90 transition-opacity"
+            >
+              Upload media
+            </Link>
+          </Surface>
         ) : (
           <div className="space-y-2">
             {jobs.map((j) => (
