@@ -3,6 +3,7 @@
 import { useSearchParams } from "next/navigation";
 import { TopBar } from "@/components/layout/TopBar";
 import { RenderCenter } from "@/features/render-center/RenderCenter";
+import { RendersEmptyState } from "@/components/empty-states/RendersEmptyState";
 import { useRecentJobs } from "@/hooks/useRecentJobs";
 
 export default function RendersPage() {
@@ -11,6 +12,12 @@ export default function RendersPage() {
 
   const { jobs, loading } = useRecentJobs();
   const jobId = paramJobId ?? (jobs[0]?.id ?? null);
+
+  // When there's a job but the RenderCenter shows no renders, the empty
+  // state inside RenderCenter can show pipeline progress. For now, we
+  // use a simplified check: if a job exists but there are no render
+  // outputs, show the pipeline-aware empty state.
+  const hasJobWithRenders = jobs.length > 0;
 
   return (
     <>
@@ -26,18 +33,7 @@ export default function RendersPage() {
             Loading jobs…
           </div>
         ) : (
-          <div className="flex flex-col items-center justify-center h-64 gap-4">
-            <p className="text-sm" style={{ color: "var(--color-text-secondary)" }}>
-              No render jobs yet. Start a pipeline first.
-            </p>
-            <a
-              href="/app/upload"
-              className="text-sm font-medium px-4 py-2 rounded-lg"
-              style={{ background: "var(--color-accent-green)", color: "var(--color-surface-0)" }}
-            >
-              Upload a match
-            </a>
-          </div>
+          <RendersEmptyState jobId={hasJobWithRenders ? jobs[0]?.id : null} />
         )}
       </div>
     </>

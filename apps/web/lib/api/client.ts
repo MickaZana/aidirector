@@ -4,6 +4,8 @@
  * - Auth: pulls a Clerk JWT and sends it as `Authorization: Bearer …`.
  * - Errors: turns non-2xx responses into typed `ApiError` instances
  *   with the status code + the response body for surfacing in the UI.
+ * - Rate limits: on 429, dispatches a `rate-limited` custom DOM event
+ *   with the `Retry-After` header so the UI can show toast + cooldown.
  * - No business logic. No retries. No optimistic state. Those live in
  *   `services/` or `hooks/`.
  *
@@ -26,6 +28,49 @@ export interface ApiClientOptions {
   getToken: () => Promise<string | null>;
 }
 
+/**
+ * Parses the `Retry-After` header value.
+ * Returns seconds to wait, or 60 as a safe default.
+ */
+function parseRetryAfter(val: string | null): number {
+  if (!val) return 60;
+  const n = Number(val);
+  return Number.isFinite(n) && n > 0 ? Math.ceil(n) : 60;
+}
+
+/** Custom event detail for 429 rate-limit notifications. */
+export interface RateLimitEventDetail {
+  retryAfterSeconds: number;
+  path: string;
+}
+
+export const RATE_LIMIT_EVENT = "rate-limited" as const;
+
+function dispatchRateLimit(retryAfterSeconds: number, path: string): void {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(
+    new CustomEvent<RateLimitEventDetail>(RATE_LIMIT_EVENT, {
+      detail: { retryAfterSeconds, path },
+    }),
+  );
+}
+
+/** Custom event detail for 402 billing-limit notifications. */
+export interface BillingLimitEventDetail {
+  path: string;
+}
+
+export const BILLING_LIMIT_EVENT = "billing-limit" as const;
+
+function dispatchBillingLimit(path: string): void {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(
+    new CustomEvent<BillingLimitEventDetail>(BILLING_LIMIT_EVENT, {
+      detail: { path },
+    }),
+  );
+}
+
 export class ApiClient {
   constructor(private readonly opts: ApiClientOptions) {}
 
@@ -39,6 +84,18 @@ export class ApiClient {
         ...(init.headers ?? {}),
       },
     });
+
+    // Dispatch rate-limit event before throwing, so the UI can start
+    // cooldown timers immediately.
+    if (res.status === 429) {
+      dispatchRateLimit(parseRetryAfter(res.headers.get("Retry-After")), path);
+    }
+
+    // Dispatch billing-limit event on 402, so the UI can show
+    // a "Payment failed" / "Update billing" toast.
+    if (res.status === 402) {
+      dispatchBillingLimit(path);
+    }
 
     const text = await res.text();
     let body: unknown = text;

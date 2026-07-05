@@ -3,6 +3,7 @@
 import { useSearchParams } from "next/navigation";
 import { TopBar } from "@/components/layout/TopBar";
 import { RankedClipsBoard } from "@/features/ranked-clips/RankedClipsBoard";
+import { ClipsEmptyState } from "@/components/empty-states/ClipsEmptyState";
 import { useRecentJobs } from "@/hooks/useRecentJobs";
 
 export default function ClipsPage() {
@@ -26,18 +27,7 @@ export default function ClipsPage() {
             Loading jobs…
           </div>
         ) : (
-          <div className="flex flex-col items-center justify-center h-64 gap-4">
-            <p className="text-sm" style={{ color: "var(--color-text-secondary)" }}>
-              No jobs yet. Upload a match to get started.
-            </p>
-            <a
-              href="/app/upload"
-              className="text-sm font-medium px-4 py-2 rounded-lg"
-              style={{ background: "var(--color-accent-green)", color: "var(--color-surface-0)" }}
-            >
-              Upload a match
-            </a>
-          </div>
+          <ClipsEmptyState />
         )}
       </div>
     </>

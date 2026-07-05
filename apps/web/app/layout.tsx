@@ -25,8 +25,30 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       }}
     >
       <html lang="en">
-        <body>{children}</body>
+        <body>
+          {children}
+          {/* Global overlay components — always mounted */}
+          <Sprint45Overlays />
+        </body>
       </html>
     </ClerkProvider>
+  );
+}
+
+/**
+ * Sprint 4.5 global overlay components.
+ * Rendered outside the page tree so they stack above everything.
+ */
+import { Toaster } from "@/components/ui/Toaster";
+import { RateLimitListener } from "@/components/error-handling/RateLimitListener";
+import { BillingLimitListener } from "@/components/error-handling/BillingLimitListener";
+
+function Sprint45Overlays() {
+  return (
+    <>
+      <RateLimitListener />
+      <BillingLimitListener />
+      <Toaster />
+    </>
   );
 }

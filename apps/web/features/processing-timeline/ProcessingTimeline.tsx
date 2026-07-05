@@ -3,6 +3,7 @@
 import { Surface } from "@/design-system/Surface";
 import { Badge } from "@/design-system/Badge";
 import { PipelineStageNode } from "@/components/pipeline/PipelineStageNode";
+import { PipelineErrorCard } from "@/components/error-handling/PipelineErrorCard";
 import { useJobView } from "@/hooks/useJobView";
 import { currentStage } from "@/services/pipeline-stages";
 import { formatRelativeTime, shortenHash, shortenId } from "@/lib/format";
@@ -24,6 +25,20 @@ export function ProcessingTimeline({ jobId }: Props) {
 
   const active = currentStage(stages);
   const totalElapsed = stages.reduce((acc, s) => acc + (s.elapsed_seconds ?? 0), 0);
+  const failedStage = stages.find((s) => s.status === "failed");
+
+  // Show error card when the job has failed
+  if (view.job.status === "failed") {
+    return (
+      <div className="space-y-4">
+        <PipelineErrorCard
+          jobId={jobId}
+          failedStage={failedStage}
+          errorMessage={view.job.error}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -39,7 +54,7 @@ export function ProcessingTimeline({ jobId }: Props) {
           </div>
           <div className="flex flex-col items-end gap-2">
             <Badge
-              status={view.job.status === "succeeded" ? "succeeded" : view.job.status === "running" ? "running" : view.job.status === "failed" ? "failed" : "queued"}
+              status={view.job.status === "succeeded" ? "succeeded" : view.job.status === "running" ? "running" : "queued"}
               pulse={view.job.status === "running"}
             >
               {view.job.status}

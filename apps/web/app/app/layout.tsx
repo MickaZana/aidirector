@@ -1,5 +1,6 @@
 import * as React from "react";
 import { AppShell } from "@/components/layout/AppShell";
+import { OfflineBanner } from "@/components/error-handling/OfflineBanner";
 
 /**
  * Authenticated app shell. Sidebar + content. Each route owns its own
@@ -11,5 +12,10 @@ import { AppShell } from "@/components/layout/AppShell";
 export const dynamic = "force-dynamic";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
-  return <AppShell>{children}</AppShell>;
+  return (
+    <>
+      <OfflineBanner />
+      <AppShell>{children}</AppShell>
+    </>
+  );
 }

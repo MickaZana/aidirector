@@ -279,6 +279,8 @@ export function UploadStudio() {
 
 function QueueRow({ entry }: { entry: QueueEntry }) {
   const { snapshot } = entry;
+  const dispatch = useUploadQueue((s) => s.dispatch);
+  const remove = useUploadQueue((s) => s.remove);
   const progress = snapshot.context.file && snapshot.state === "uploading"
     ? snapshot.context.bytesUploaded / Math.max(1, entry.fileSize)
     : snapshot.state === "complete"
@@ -306,6 +308,22 @@ function QueueRow({ entry }: { entry: QueueEntry }) {
         <div className="mt-2 max-w-md">
           <ProgressTrack value={progress} tone={isInflight(snapshot.state) ? "blue" : "accent"} />
         </div>
+        {/* Error detail + retry for failed uploads */}
+        {snapshot.state === "failed" && (
+          <div className="mt-3 flex items-center gap-3">
+            {snapshot.context.error && (
+              <span className="text-[11px] text-[color:var(--color-status-failed)] font-mono">
+                {snapshot.context.error.message}
+              </span>
+            )}
+            <button
+              onClick={() => { remove(entry.id); }}
+              className="text-[11px] font-semibold text-[color:var(--color-text-tertiary)] hover:text-[color:var(--color-text-primary)] transition-colors"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
       </div>
     </Surface>
   );
