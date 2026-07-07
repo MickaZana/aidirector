@@ -34,7 +34,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: List Vercel env vars (diagnostic)
-        run: pnpm dlx vercel@latest env ls production --token="${{ secrets.VERCEL_TOKEN }}" --yes
+        run: pnpm dlx vercel@latest env ls production --token="${{ secrets.VERCEL_TOKEN }}"
 
       - name: Deploy to Vercel
         # --scope is for team accounts only — this deploys under a personal
