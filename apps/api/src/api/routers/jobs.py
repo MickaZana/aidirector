@@ -22,11 +22,12 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Response, status
+from fastapi import APIRouter, HTTPException, Request, Response, status
 from pydantic import BaseModel
 from sqlalchemy import select
 
 from api.deps import DbSession, TenantRow
+from api.rate_limit import limiter
 from api.models import (
     ClipCandidate,
     DirectorPlan,
@@ -71,7 +72,8 @@ class JobRowOut(BaseModel):
 
 
 @router.post("", response_model=JobRowOut, status_code=status.HTTP_201_CREATED)
-def create_job(req: JobCreate, tenant: TenantRow, db: DbSession) -> JobRowOut:
+@limiter.limit("20/minute")
+def create_job(request: Request, req: JobCreate, tenant: TenantRow, db: DbSession) -> JobRowOut:
     plan = getattr(tenant, "plan", "starter") or "starter"
     check_match_quota(db, tenant_id=str(tenant.id), plan=plan)
 

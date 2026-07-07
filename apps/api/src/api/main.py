@@ -5,14 +5,14 @@ from typing import Callable
 import logfire
 import sentry_sdk
 import stripe
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from prometheus_fastapi_instrumentator import Instrumentator
-from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
-from slowapi.util import get_remote_address
 
 from api.config import get_settings
+from api.rate_limit import limiter
 from api.startup_check import check_env
 from api.routers import (
     billing,
@@ -29,20 +29,6 @@ from api.routers import (
     webhooks,
     ws_jobs,
 )
-
-
-# ── Rate limiter (keyed by tenant bearer token, falls back to IP) ─────────────
-
-
-def _rate_key(request: Request) -> str:
-    auth = request.headers.get("authorization", "")
-    if auth.lower().startswith("bearer "):
-        # Use first 32 chars of token as key — no decoding required
-        return auth[7:39]
-    return get_remote_address(request)
-
-
-limiter = Limiter(key_func=_rate_key, default_limits=["120/minute"])
 
 
 # ── Observability ─────────────────────────────────────────────────────────────

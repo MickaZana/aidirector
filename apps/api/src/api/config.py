@@ -31,6 +31,10 @@ class Settings(BaseSettings):
     stripe_price_pro: str = ""
     stripe_price_studio: str = ""
 
+    # pydantic-settings parses list fields from env as JSON, e.g.:
+    #   ALLOWED_ORIGINS=["https://app.example.com","https://example.vercel.app"]
+    # A bare comma-separated string ("a.com,b.com") raises a SettingsError at
+    # startup — the whole app fails to boot, not just CORS.
     allowed_origins: list[str] = ["http://localhost:3000"]
 
     anthropic_api_key: str = ""

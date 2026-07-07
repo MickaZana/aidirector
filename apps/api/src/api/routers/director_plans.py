@@ -15,12 +15,13 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from api.deps import DbSession, TenantRow
 from api.models import DirectorPlan, Job, UsageEventType, PlanCorrection
+from api.rate_limit import limiter
 from api.schemas.director_plan import DirectorPlan as DirectorPlanContract
 from api.services.usage_events import emit_usage_event
 
@@ -42,7 +43,9 @@ class DirectorPlanView(BaseModel):
 
 
 @router.post("", response_model=DirectorPlanView, status_code=status.HTTP_201_CREATED)
+@limiter.limit("30/minute")
 def create_director_plan(
+    request: Request,
     job_id: uuid.UUID,
     req: DirectorPlanCreate,
     tenant: TenantRow,

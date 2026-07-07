@@ -9,12 +9,13 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel
 from sqlalchemy import select
 
 from api.deps import Claims, DbSession, TenantRow
 from api.models import Upload, UploadStatus, User, UsageEventType
+from api.rate_limit import limiter
 from api.services import r2
 from api.services.usage_events import emit_usage_event
 
@@ -48,7 +49,9 @@ class UploadView(BaseModel):
 
 
 @router.post("/presign", response_model=PresignResponse, status_code=status.HTTP_201_CREATED)
+@limiter.limit("10/minute")
 def presign(
+    request: Request,
     req: PresignRequest,
     tenant: TenantRow,
     claims: Claims,
