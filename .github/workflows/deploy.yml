@@ -36,8 +36,12 @@ jobs:
       - name: Deploy to Vercel
         # --scope is for team accounts only — this deploys under a personal
         # account, where the token is already scoped correctly by default.
-        # Passing --scope here failed with "You do not have access to the
-        # specified account".
+        # The Vercel CLI also refuses to run if VERCEL_ORG_ID is set without
+        # a matching VERCEL_PROJECT_ID — since no project is linked yet, omit
+        # both and let this first deploy auto-create the project. Once it
+        # exists, set VERCEL_PROJECT_ID (from the Vercel dashboard) as a repo
+        # secret so future deploys reuse the same project instead of forking
+        # a new one each run.
         run: |
           pnpm dlx vercel@latest deploy \
             --prod \
@@ -46,9 +50,6 @@ jobs:
             --archive=tgz \
             --yes \
             2>&1
-        env:
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
 
   # ─── Modal workers ────────────────────────────────────────────────────────
   api-deploy:
