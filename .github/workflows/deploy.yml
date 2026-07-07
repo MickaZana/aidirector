@@ -34,11 +34,14 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Deploy to Vercel
+        # --scope is for team accounts only — this deploys under a personal
+        # account, where the token is already scoped correctly by default.
+        # Passing --scope here failed with "You do not have access to the
+        # specified account".
         run: |
           pnpm dlx vercel@latest deploy \
             --prod \
             --token="${{ secrets.VERCEL_TOKEN }}" \
-            --scope="${{ secrets.VERCEL_ORG_ID }}" \
             --confirm \
             --archive=tgz \
             --yes \
