@@ -33,6 +33,15 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Link Vercel project
+        # vercel deploy without a link matches an existing project by
+        # directory name for the build itself, but never associates the
+        # deployment with the project's dashboard-configured Environment
+        # Variables — hence NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY going missing
+        # at build time despite being set. Linking writes .vercel/project.json
+        # so subsequent steps in this job pick up the right project.
+        run: pnpm dlx vercel@latest link --yes --token="${{ secrets.VERCEL_TOKEN }}"
+
       - name: List Vercel env vars (diagnostic)
         run: pnpm dlx vercel@latest env ls production --token="${{ secrets.VERCEL_TOKEN }}"
 
