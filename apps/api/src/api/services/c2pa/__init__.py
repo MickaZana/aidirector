@@ -12,12 +12,12 @@ Usage:
 from __future__ import annotations
 
 from api.services.c2pa.did_service import DidService, get_did_service
-from api.services.c2pa.embedder import C2paEmbedder, embed_manifest
+from api.services.c2pa.embedder import EmbedResult, embed_manifest
 from api.services.c2pa.trust_anchor import TrustAnchorService, get_trust_anchor
 
 __all__ = [
-    "C2paEmbedder",
     "DidService",
+    "EmbedResult",
     "TrustAnchorService",
     "embed_manifest",
     "get_did_service",

@@ -31,17 +31,26 @@ class TestAlembicMigrations:
         revisions = list(script.walk_revisions())
         assert len(revisions) >= 1
 
-    def test_latest_migration_is_marketplace(self):
-        """Sanity-check that migration 0007 (brief_template_marketplace) is the current head."""
+    def test_head_includes_every_migration_file(self):
+        """The head's ancestry must include every file in versions/ — catches a
+        new migration added without being chained in as the new head (which
+        would silently leave it unreachable and unapplied)."""
+        from pathlib import Path
         from alembic.config import Config
         from alembic.script import ScriptDirectory
 
         cfg = Config("alembic.ini")
         script = ScriptDirectory.from_config(cfg)
         head = script.get_current_head()
-        assert head == "0007", (
-            f"Expected head 0007 (brief_template_marketplace), got {head!r}. "
-            "Update this test when a new migration is added."
+
+        chain = list(script.walk_revisions(base="base", head=head))
+        file_count = len(
+            [f for f in Path(script.versions).glob("*.py") if f.name != "__init__.py"]
+        )
+        assert len(chain) == file_count, (
+            f"Head {head!r} reaches {len(chain)} revisions but {file_count} migration "
+            "files exist — a migration was added without chaining it in as the head "
+            "(check its down_revision)."
         )
 
     def test_render_manifest_version_not_reset(self):
