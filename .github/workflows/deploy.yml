@@ -33,6 +33,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: List Vercel env vars (diagnostic)
+        run: pnpm dlx vercel@latest env ls production --token="${{ secrets.VERCEL_TOKEN }}" --yes
+
       - name: Deploy to Vercel
         # --scope is for team accounts only — this deploys under a personal
         # account, where the token is already scoped correctly by default.
