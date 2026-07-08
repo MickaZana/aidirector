@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { SignedIn, SignedOut, SignInButton } from "@clerk/nextjs";
+import { LogoMark } from "@/components/brand/LogoMark";
 import {
   ArrowRight,
-  Clapperboard,
   Sparkles,
   Zap,
   Check,
@@ -297,17 +297,7 @@ export default function Home() {
           style={{ background: "rgba(2,3,10,0.72)", backdropFilter: "blur(20px)", borderColor: "rgba(255,255,255,0.05)" }}
         />
         <div className="flex items-center gap-2.5">
-          <div
-            className="relative h-8 w-8 rounded-lg"
-            style={{ background: "linear-gradient(135deg, var(--color-accent-green), var(--color-accent-blue))", boxShadow: "0 0 20px -4px rgba(0,230,161,0.5)" }}
-          >
-            <div
-              className="absolute inset-[1.5px] rounded-md flex items-center justify-center"
-              style={{ background: "var(--color-surface-0)" }}
-            >
-              <Clapperboard className="h-4 w-4" style={{ color: "var(--color-accent-green)" }} strokeWidth={2.5} />
-            </div>
-          </div>
+          <LogoMark className="h-8 w-8" />
           <span className="font-semibold tracking-tight text-sm">AI Director</span>
           <Badge tone="muted" className="ml-1 hidden sm:inline-flex">v0.9 · sports</Badge>
         </div>
@@ -785,12 +775,7 @@ export default function Home() {
           {/* Brand */}
           <div className="max-w-xs">
             <div className="flex items-center gap-2.5 mb-3">
-              <div
-                className="h-7 w-7 rounded-md flex items-center justify-center"
-                style={{ background: "linear-gradient(135deg, var(--color-accent-green), var(--color-accent-blue))", boxShadow: "0 0 16px -4px rgba(0,230,161,0.4)" }}
-              >
-                <Clapperboard className="h-4 w-4" style={{ color: "var(--color-surface-0)" }} strokeWidth={2.5} />
-              </div>
+              <LogoMark className="h-7 w-7" />
               <span className="font-semibold text-sm" style={{ color: "var(--color-text-primary)" }}>AI Director</span>
             </div>
             <p className="text-xs leading-relaxed" style={{ color: "var(--color-text-tertiary)" }}>

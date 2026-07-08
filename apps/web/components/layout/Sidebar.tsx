@@ -5,7 +5,6 @@ import { usePathname } from "next/navigation";
 import {
   Activity,
   BookOpen,
-  Clapperboard,
   Film,
   LayoutGrid,
   LineChart,
@@ -13,6 +12,7 @@ import {
   Sparkles,
   Upload,
 } from "lucide-react";
+import { LogoMark } from "@/components/brand/LogoMark";
 import { cn } from "@/lib/cn";
 
 const NAV = [
@@ -34,11 +34,7 @@ export function Sidebar() {
   return (
     <aside className="hidden lg:flex flex-col w-64 shrink-0 border-r border-[color:var(--color-border-soft)] bg-[color:var(--color-surface-1)]/60 backdrop-blur-sm h-screen sticky top-0">
       <div className="flex items-center gap-2.5 px-5 h-16 border-b border-[color:var(--color-border-soft)]">
-        <div className="relative h-7 w-7 rounded-lg bg-gradient-to-br from-[color:var(--color-accent-green)] to-[color:var(--color-accent-blue)] shadow-[0_0_24px_-4px_rgba(0,230,161,0.6)]">
-          <div className="absolute inset-0.5 rounded-md bg-[color:var(--color-surface-0)] flex items-center justify-center">
-            <Clapperboard className="h-3.5 w-3.5 text-[color:var(--color-accent-green)]" strokeWidth={2.5} />
-          </div>
-        </div>
+        <LogoMark className="h-7 w-7" />
         <div className="flex flex-col">
           <span className="font-semibold tracking-tight text-sm">AI Director</span>
           <span className="text-[10px] uppercase tracking-[0.18em] text-[color:var(--color-text-tertiary)]">
