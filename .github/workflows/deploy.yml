@@ -83,7 +83,7 @@ jobs:
         run: uv sync --extra asr
 
       - name: Deploy to Modal
-        run: uv run modal deploy apps/api/modal_app.py
+        run: uv run modal deploy modal_app.py
         env:
           MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
           MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
