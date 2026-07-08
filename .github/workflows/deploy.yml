@@ -42,9 +42,6 @@ jobs:
         # so subsequent steps in this job pick up the right project.
         run: pnpm dlx vercel@latest link --yes --token="${{ secrets.VERCEL_TOKEN }}"
 
-      - name: List Vercel env vars (diagnostic)
-        run: pnpm dlx vercel@latest env ls production --token="${{ secrets.VERCEL_TOKEN }}"
-
       - name: Deploy to Vercel
         # --scope is for team accounts only — this deploys under a personal
         # account, where the token is already scoped correctly by default.
