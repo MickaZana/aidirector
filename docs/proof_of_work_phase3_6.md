@@ -8,6 +8,11 @@ Date: 2026-07-30
 
 The parent build is implemented and its automated/service checks pass, but the specification forbids a PASS while browser verification and the complete OmegaClips suite remain unverified.
 
+The two open gates are therefore explicit:
+
+1. **Codex Browser gate** — no browser backend was available, so the live authenticated UI, export, responsive, console, and CSP checks remain pending.
+2. **OmegaClips gate** — the complete nested test suite reached execution but exceeded the available 600-second verification window without a final result.
+
 ## 1. Analytics architecture
 
 The existing browser analytics abstraction remains the event API. In live mode it now submits events to the first-party API while retaining local persistence as a failure-safe fallback. Events contain only event name, stable event ID, timestamp, optional session/project identifiers, and non-PII properties.
@@ -78,8 +83,8 @@ The prior parent production build passed. Phase 3.6 changes also pass TypeScript
 
 ## 11. Remaining limitations
 
-1. Provision a Codex Browser instance and complete the specified browser checklist.
-2. Run OmegaClips in its documented full dependency environment or CI runner with enough time for the complete suite.
+1. **Codex Browser gate:** provision a browser instance and complete the specified browser checklist.
+2. **OmegaClips gate:** run the complete nested suite in its documented full dependency environment or CI runner with enough time for a final result.
 3. Add focused automated tests for analytics persistence/idempotency and admin 401/403 behavior before changing the final status to PASS.
 4. Configure a public Clerk webhook before closed-beta tenant synchronization.
 
