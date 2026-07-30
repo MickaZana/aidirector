@@ -18,6 +18,7 @@ Adding a new renderer requires only an entry below. Code paths in the
 adapter dispatch on `RendererCapability.renderer` so the new renderer is
 addressable as soon as it's registered.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -67,9 +68,9 @@ _FFMPEG_BASIC = RendererCapability(
     supported_aspect_ratios=frozenset({"9:16", "1:1", "16:9"}),
     supported_styles=frozenset({"ffmpeg_basic", "sports_hype", "documentary"}),
     supported_caption_modes=frozenset({"off", "basic"}),
-    supported_crop_modes=frozenset({"center", "action", "face", "manual"}),
+    supported_crop_modes=frozenset({"fit", "center", "action", "face", "manual"}),
     gpu_required=False,
-    capabilities=frozenset({"watermark", "normalize_audio", "scale", "pad"}),
+    capabilities=frozenset({"watermark", "normalize_audio", "scale", "pad", "crop"}),
     min_duration_s=0.5,
     max_duration_s=600.0,
     notes="Baseline CPU FFmpeg pipeline. Phase 5 default.",
@@ -80,10 +81,10 @@ _SPORTS_HYPE = RendererCapability(
     supported_aspect_ratios=frozenset({"9:16", "1:1"}),
     supported_styles=frozenset({"sports_hype"}),
     supported_caption_modes=frozenset({"basic", "sports_hype"}),
-    supported_crop_modes=frozenset({"center", "action"}),
+    supported_crop_modes=frozenset({"fit", "center", "action"}),
     gpu_required=False,
     capabilities=frozenset(
-        {"watermark", "normalize_audio", "scale", "pad", "kinetic_captions"}
+        {"watermark", "normalize_audio", "scale", "pad", "crop", "kinetic_captions"}
     ),
     min_duration_s=3.0,
     max_duration_s=120.0,
@@ -96,10 +97,10 @@ _DOCUMENTARY = RendererCapability(
     supported_aspect_ratios=frozenset({"16:9", "1:1"}),
     supported_styles=frozenset({"documentary"}),
     supported_caption_modes=frozenset({"off", "basic", "documentary"}),
-    supported_crop_modes=frozenset({"center"}),
+    supported_crop_modes=frozenset({"fit", "center"}),
     gpu_required=False,
     capabilities=frozenset(
-        {"watermark", "normalize_audio", "scale", "pad", "lower_thirds"}
+        {"watermark", "normalize_audio", "scale", "pad", "crop", "lower_thirds"}
     ),
     min_duration_s=5.0,
     max_duration_s=600.0,
@@ -112,9 +113,9 @@ _STATIC = RendererCapability(
     supported_aspect_ratios=frozenset({"9:16", "1:1", "16:9"}),
     supported_styles=frozenset({"static"}),
     supported_caption_modes=frozenset({"off"}),
-    supported_crop_modes=frozenset({"center"}),
+    supported_crop_modes=frozenset({"fit", "center"}),
     gpu_required=False,
-    capabilities=frozenset({"watermark", "static_template"}),
+    capabilities=frozenset({"watermark", "crop", "static_template"}),
     min_duration_s=1.0,
     max_duration_s=15.0,
     notes="Static-image renderer. Caller supplies template + duration.",
@@ -186,19 +187,13 @@ def validate_manifest(manifest: RenderManifest) -> CompatibilityResult:
             f"crop_mode {manifest.crop_mode!r} not in {sorted(cap.supported_crop_modes)}"
         )
     if manifest.duration < cap.min_duration_s:
-        reasons.append(
-            f"duration {manifest.duration} < min_duration_s {cap.min_duration_s}"
-        )
+        reasons.append(f"duration {manifest.duration} < min_duration_s {cap.min_duration_s}")
     if manifest.duration > cap.max_duration_s:
-        reasons.append(
-            f"duration {manifest.duration} > max_duration_s {cap.max_duration_s}"
-        )
+        reasons.append(f"duration {manifest.duration} > max_duration_s {cap.max_duration_s}")
     if manifest.watermark and "watermark" not in cap.capabilities:
         reasons.append(f"renderer {manifest.renderer!r} lacks watermark capability")
     if manifest.normalize_audio and "normalize_audio" not in cap.capabilities:
-        reasons.append(
-            f"renderer {manifest.renderer!r} lacks normalize_audio capability"
-        )
+        reasons.append(f"renderer {manifest.renderer!r} lacks normalize_audio capability")
 
     if reasons:
         return CompatibilityResult.fail(*reasons)

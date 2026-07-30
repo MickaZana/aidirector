@@ -12,6 +12,10 @@ const cspDirectives = [
     : "script-src 'self' 'unsafe-inline' https://clerk.com https://*.clerk.accounts.dev",
   // Styles: allow self + inline (Tailwind inlines critical CSS)
   "style-src 'self' 'unsafe-inline'",
+  // Clerk's browser worker is blob-backed; keep worker execution limited to
+  // this app and blob URLs rather than broadening script-src.
+  "worker-src 'self' blob:",
+  "child-src 'self' blob:",
   // Images: allow self + data URIs + Clerk avatar CDN + R2 public bucket
   "img-src 'self' data: blob: https://*.clerk.com https://*.cloudflare.com",
   // Fonts: self only
@@ -19,7 +23,7 @@ const cspDirectives = [
   // Connect: API + Clerk + Sentry + Stripe
   [
     "connect-src 'self'",
-    "https://clerk.com https://*.clerk.accounts.dev",
+    "https://clerk.com https://*.clerk.com https://*.clerk.accounts.dev",
     "https://sentry.io https://*.ingest.sentry.io",
     "https://api.stripe.com",
     isDev ? "ws://localhost:*" : "",
@@ -27,11 +31,11 @@ const cspDirectives = [
     .filter(Boolean)
     .join(" "),
   // Frames: Stripe payment element only
-  "frame-src https://js.stripe.com https://hooks.stripe.com",
+  "frame-src https://js.stripe.com https://hooks.stripe.com https://*.clerk.com https://*.clerk.accounts.dev",
   "object-src 'none'",
   "base-uri 'self'",
   "form-action 'self'",
-  "upgrade-insecure-requests",
+  ...(isDev ? [] : ["upgrade-insecure-requests"]),
 ].join("; ");
 
 const securityHeaders = [

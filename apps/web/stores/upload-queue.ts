@@ -4,6 +4,7 @@
  * row + usage events; this store just tracks the active flight.
  */
 import { create } from "zustand";
+import { config } from "@/config";
 import {
   INITIAL_UPLOAD_SNAPSHOT,
   reduceUpload,
@@ -56,7 +57,7 @@ export const useUploadQueue = create<UploadQueueState>((set) => ({
       snapshot: INITIAL_UPLOAD_SNAPSHOT,
       createdAt: new Date().toISOString(),
     };
-    set((s) => ({ entries: [entry, ...s.entries].slice(0, 12) }));
+    set((s) => ({ entries: [entry, ...s.entries].slice(0, config.upload.maxQueueEntries) }));
     return entry;
   },
   dispatch(id, event) {

@@ -13,6 +13,7 @@
  */
 import type { Endpoints } from "@/lib/api/endpoints";
 import type { JobEvents, JobView } from "@/lib/api/types";
+import { config } from "@/config";
 
 export type JobEvent =
   | { type: "view"; view: JobView }
@@ -26,7 +27,7 @@ export interface JobEventTransport {
 export class PollingTransport implements JobEventTransport {
   constructor(
     private readonly endpoints: Endpoints,
-    private readonly intervalMs: number = 4000,
+    private readonly intervalMs: number = config.processing.pollingIntervalMs,
   ) {}
 
   subscribe(jobId: string, onEvent: (evt: JobEvent) => void): () => void {

@@ -4,8 +4,12 @@
  * Lightweight zustand store for transient UI notifications — success,
  * error, warning, info. Toasts auto-dismiss after a configurable duration.
  * The Toaster component renders them from this store.
+ *
+ * Duration defaults come from the application config layer. Override per
+ * toast by passing an explicit `durationMs`.
  */
 import { create } from "zustand";
+import { config } from "@/config";
 
 export type ToastVariant = "success" | "error" | "warning" | "info";
 
@@ -29,12 +33,7 @@ interface ToastState {
 let toastCounter = 0;
 const localId = () => `toast_${Date.now()}_${++toastCounter}`;
 
-const DEFAULT_DURATION: Record<ToastVariant, number> = {
-  success: 4_000,
-  error: 8_000,
-  warning: 6_000,
-  info: 4_000,
-};
+const DEFAULT_DURATION = config.notifications.defaultDurationMs;
 
 export const useToastStore = create<ToastState>((set) => ({
   toasts: [],

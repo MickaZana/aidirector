@@ -29,7 +29,7 @@ PlatformTarget = Literal[
 
 Pacing = Literal["fast", "medium", "slow"]
 CaptionStyle = Literal["sports_hype", "minimal", "documentary"]
-CropStrategy = Literal["center", "action", "face", "manual"]
+CropStrategy = Literal["fit", "center", "action", "face", "manual"]
 RenderStyle = Literal[
     "ffmpeg_basic",
     "sports_hype",

@@ -1,11 +1,18 @@
 from functools import lru_cache
+from pathlib import Path
 from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+_REPO_ROOT = Path(__file__).resolve().parents[4]
+_WORKSPACE_ENV = _REPO_ROOT / ".env.local"
+
+
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env.local", extra="ignore")
+    # Resolve the workspace env file from the module location so the API gets
+    # the same configuration whether launched from the repo root or apps/api.
+    model_config = SettingsConfigDict(env_file=str(_WORKSPACE_ENV), extra="ignore")
 
     env: Literal["development", "staging", "production"] = "development"
 

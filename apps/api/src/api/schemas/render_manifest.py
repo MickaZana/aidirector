@@ -32,7 +32,7 @@ from api.schemas.director_plan import (
     RenderStyle,
 )
 
-RENDER_MANIFEST_VERSION = "2"  # bumped: added title + subtitle_uri fields
+RENDER_MANIFEST_VERSION = "3"  # bumped: added crop_mode fill strategies (smart, center, fit)
 
 Renderer = Literal[
     "ffmpeg_basic",

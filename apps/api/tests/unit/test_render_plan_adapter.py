@@ -123,9 +123,31 @@ class TestVideoFilters:
         filters = self._cmd(tmp_path)
         assert any("scale=" in f for f in filters)
 
-    def test_pad_filter_present(self, tmp_path: Path):
-        filters = self._cmd(tmp_path)
-        assert any("pad=" in f for f in filters)
+    def test_crop_filter_present_for_center_mode(self, tmp_path: Path):
+        """crop_mode='center' should use crop+scale, not scale+pad."""
+        filters = self._cmd(tmp_path, crop_mode="center")
+        assert any("crop=" in f for f in filters), "Expected crop= filter for center mode"
+        assert not any("pad=" in f for f in filters), "No pad= expected for center mode"
+
+    def test_pad_filter_present_for_fit_mode(self, tmp_path: Path):
+        """crop_mode='fit' should use scale+pad (letterbox behavior)."""
+        filters = self._cmd(tmp_path, crop_mode="fit")
+        assert any("pad=" in f for f in filters), "Expected pad= filter for fit mode"
+        assert any("scale=" in f for f in filters)
+
+    def test_crop_mode_action_fills_frame(self, tmp_path: Path):
+        """crop_mode='action' should fill frame (no pad, no black bars)."""
+        filters = self._cmd(tmp_path, crop_mode="action")
+        assert any("crop=" in f for f in filters), "Expected crop= filter for action mode"
+        assert not any("pad=" in f for f in filters), "No pad= expected for action mode"
+
+    def test_crop_filter_dimensions_are_even(self, tmp_path: Path):
+        """Crop dimensions must be even numbers for yuv420p compatibility."""
+        filters = self._cmd(tmp_path, crop_mode="center")
+        crop_filter = next(f for f in filters if "crop=" in f)
+        # The crop expression uses 2*trunc(.../2) which guarantees even values
+        assert "2*trunc" in crop_filter, "Crop should use 2*trunc for even dimensions"
+        assert "min(iw" in crop_filter, "Crop should handle aspect ratio generically"
 
     def test_no_drawtext_without_title(self, tmp_path: Path):
         filters = self._cmd(tmp_path, title=None)

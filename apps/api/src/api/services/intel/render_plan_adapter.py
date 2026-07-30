@@ -273,11 +273,44 @@ def _build_ffmpeg_command(ffmpeg: str, manifest: RenderManifest, output_path: Pa
     has_normalize = manifest.normalize_audio and "normalize_audio" in cap.capabilities
     has_watermark = manifest.watermark and "watermark" in cap.capabilities
 
-    vfilters = [
-        f"scale={manifest.output_width}:{manifest.output_height}"
-        f":force_original_aspect_ratio=decrease",
-        f"pad={manifest.output_width}:{manifest.output_height}:(ow-iw)/2:(oh-ih)/2:black",
-    ]
+    # ── Crop strategy ─────────────────────────────────────────────────
+    # Three modes:
+    #   "fit"    → scale + pad (letterbox/pillarbox with black bars)
+    #              Keeps the full source frame visible, fills remaining
+    #              space with black bars. Best for slides, presentations.
+    #   "center" → crop + scale (fill entire frame, no black bars)
+    #              Crops from center of source to match target aspect
+    #              ratio, then scales to fill output. Best for talking
+    #              heads, static cameras.
+    #   "action","face","manual" → dynamic crop + scale
+    #              Same as center for now. When per-frame tracking data
+    #              is available from the OmegaClips pipeline, this branch
+    #              will use it to follow the subject dynamically.
+    target_aspect = manifest.output_width / manifest.output_height
+    has_crop = "crop" in cap.capabilities
+
+    if manifest.crop_mode == "fit" or not has_crop:
+        # Scale to fit within output frame, pad remaining with black bars
+        vfilters = [
+            f"scale={manifest.output_width}:{manifest.output_height}"
+            f":force_original_aspect_ratio=decrease",
+            f"pad={manifest.output_width}:{manifest.output_height}:(ow-iw)/2:(oh-ih)/2:black",
+        ]
+    else:
+        # Crop to fill target aspect ratio from source center, then scale to output.
+        # Generic FFmpeg expression handling both landscape→portrait and portrait→landscape:
+        #   - If source is wider than target: crop_h = ih, crop_w = ih * target_aspect
+        #   - If source is taller than target: crop_w = iw, crop_h = iw / target_aspect
+        # The `min(iw\,ih*AR)` / `min(ih\,iw/AR)` pattern selects the right one.
+        # 2*trunc(.../2) ensures even dimensions (required for yuv420p).
+        vfilters = [
+            f"crop="
+            f"2*trunc(min(iw\\,ih*{target_aspect:.10f})/2):"
+            f"2*trunc(min(ih\\,iw/{target_aspect:.10f})/2):"
+            f"(iw-2*trunc(min(iw\\,ih*{target_aspect:.10f})/2))/2:"
+            f"(ih-2*trunc(min(ih\\,iw/{target_aspect:.10f})/2))/2",
+            f"scale={manifest.output_width}:{manifest.output_height}",
+        ]
 
     # Title banner: top-center, white text with semi-opaque black box for
     # readability against any underlying frame.

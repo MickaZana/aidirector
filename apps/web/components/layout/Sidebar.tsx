@@ -16,9 +16,9 @@ import { LogoMark } from "@/components/brand/LogoMark";
 import { cn } from "@/lib/cn";
 
 const NAV = [
-  { href: "/app/upload", label: "Upload Studio", icon: Upload, accent: true },
+  { href: "/app/upload", label: "New Clip", icon: Upload, accent: true },
   { href: "/app/jobs", label: "Pipelines", icon: Activity },
-  { href: "/app/clips", label: "Clips Board", icon: LayoutGrid },
+  { href: "/app/clips", label: "My Clips", icon: LayoutGrid },
   { href: "/app/director", label: "Director Review", icon: Sparkles },
   { href: "/app/renders", label: "Render Center", icon: Film },
   { href: "/app/templates", label: "Brief Templates", icon: BookOpen },

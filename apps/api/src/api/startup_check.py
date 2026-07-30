@@ -22,7 +22,6 @@ _CRITICAL: list[tuple[str, str]] = [
     ("REDIS_URL", "Redis URL — job queue and idempotency unavailable without it"),
     ("CLERK_SECRET_KEY", "Clerk auth — all authenticated endpoints return 401"),
     ("CLERK_PUBLISHABLE_KEY", "Clerk auth — frontend cannot initialise Clerk"),
-    ("CLERK_WEBHOOK_SECRET", "Clerk webhook — tenant sync will silently fail"),
 ]
 
 _WARN: list[tuple[str, str]] = [
@@ -32,6 +31,7 @@ _WARN: list[tuple[str, str]] = [
     ("R2_BUCKET", "Cloudflare R2 — uploads and exports will fail"),
     ("STRIPE_SECRET_KEY", "Stripe — billing endpoints will fail"),
     ("STRIPE_WEBHOOK_SECRET", "Stripe — webhook validation will reject all events"),
+    ("CLERK_WEBHOOK_SECRET", "Clerk webhook — tenant sync will silently fail until a public endpoint exists"),
     ("ANTHROPIC_API_KEY", "Director Agent — AI plan generation unavailable"),
     ("PROVENANCE_SIGNING_KEY_B64", "Provenance — rendered clips will not be signed"),
     ("SENTRY_DSN", "Error tracking disabled — production errors will be silent"),
