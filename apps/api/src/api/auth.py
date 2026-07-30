@@ -21,6 +21,7 @@ class ClerkClaims:
     user_id: str
     tenant_id: str  # Clerk org_id, or `user_<id>` for personal tenants
     email: str | None
+    role: str | None = None
 
 
 _jwks_client: PyJWKClient | None = None
@@ -50,4 +51,6 @@ def verify_clerk_jwt(token: str) -> ClerkClaims:
 
     user_id = payload["sub"]
     tenant_id = payload.get("org_id") or f"user_{user_id}"
-    return ClerkClaims(user_id=user_id, tenant_id=tenant_id, email=payload.get("email"))
+    metadata = payload.get("metadata") or payload.get("public_metadata") or {}
+    role = payload.get("role") or metadata.get("role")
+    return ClerkClaims(user_id=user_id, tenant_id=tenant_id, email=payload.get("email"), role=role)

@@ -23,6 +23,7 @@ from api.routers import (
     engagement,
     exports,
     health,
+    analytics,
     jobs,
     renders,
     uploads,
@@ -165,6 +166,7 @@ def create_app() -> FastAPI:
     app.include_router(c2pa.router, prefix="/api/v1")
     app.include_router(dsr.router, prefix="/api/v1")
     app.include_router(webhooks.router, prefix="/api/v1")
+    app.include_router(analytics.router, prefix="/api/v1")
     app.include_router(ws_jobs.router)
 
     # Legacy /api/ prefix (backward-compatible until all clients migrate to v1)
@@ -179,6 +181,7 @@ def create_app() -> FastAPI:
     app.include_router(c2pa.router, prefix="/api")
     app.include_router(dsr.router, prefix="/api")
     app.include_router(webhooks.router, prefix="/api")
+    app.include_router(analytics.router, prefix="/api")
 
     return app
 

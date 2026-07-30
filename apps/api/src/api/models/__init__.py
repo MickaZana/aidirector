@@ -30,6 +30,7 @@ from api.models.ranking import RankingSnapshot
 from api.models.usage import UsageEvent, UsageEventType
 from api.models.brief_templates import BriefTemplate
 from api.models.corrections import PlanCorrection
+from api.models.analytics import AnalyticsEvent
 
 __all__ = [
     "Base",
@@ -58,4 +59,5 @@ __all__ = [
     "UsageEventType",
     "BriefTemplate",
     "PlanCorrection",
+    "AnalyticsEvent",
 ]

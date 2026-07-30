@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { useUser } from "@clerk/nextjs";
+import { useEffect, useMemo, useState } from "react";
+import { useAuth, useUser } from "@clerk/nextjs";
 import {
   Badge,
   Button,
@@ -103,13 +103,36 @@ function Funnel({ events }: { events: AnalyticsEvent[] }) {
 
 export default function BetaDashboardPage() {
   const { isLoaded, isSignedIn, user } = useUser();
+  const { getToken } = useAuth();
   const [events, setEvents] = useState<AnalyticsEvent[]>(() => analytics.getEvents());
+  const [dataSource, setDataSource] = useState<"first_party_backend" | "local_fallback">("local_fallback");
 
   const isAdmin = Boolean(
     user?.publicMetadata &&
       (user.publicMetadata as { role?: string; isAdmin?: boolean }).role === "admin" ||
       (user?.publicMetadata as { isAdmin?: boolean } | undefined)?.isAdmin === true,
   );
+
+  useEffect(() => {
+    if (!isLoaded || !isSignedIn || !isAdmin) return;
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL;
+    if (!baseUrl || baseUrl === "fixtures") return;
+    void (async () => {
+      try {
+        const token = await getToken();
+        if (!token) return;
+        const response = await fetch(`${baseUrl}/api/v1/analytics/admin/summary`, { headers: { authorization: `Bearer ${token}` } });
+        if (!response.ok) return;
+        const summary = (await response.json()) as { source: "first_party_backend"; counts: Record<string, number>; recent_events: { name: string; occurred_at: string }[] };
+        const aggregated = Object.entries(summary.counts).flatMap(([name, count]) => Array.from({ length: Math.min(count, 1000) }, (_, index) => ({ name: name as AnalyticsEvent["name"], timestamp: Date.now() - index })));
+        const recent = summary.recent_events.map((event) => ({ name: event.name as AnalyticsEvent["name"], timestamp: Date.parse(event.occurred_at) }));
+        setEvents([...aggregated, ...recent]);
+        setDataSource(summary.source);
+      } catch {
+        setDataSource("local_fallback");
+      }
+    })();
+  }, [getToken, isAdmin, isLoaded, isSignedIn]);
 
   const metrics = useMemo(() => {
     const today = new Date();
@@ -140,7 +163,7 @@ export default function BetaDashboardPage() {
     <PageContainer>
       <div className="flex flex-col gap-4 border-b border-slate-200 pb-6 md:flex-row md:items-end md:justify-between">
         <div>
-          <Badge variant={metrics.score >= 80 ? "success" : metrics.score >= 60 ? "warning" : "error"}>Beta readiness · {metrics.score}%</Badge>
+          <div className="flex flex-wrap gap-2"><Badge variant={metrics.score >= 80 ? "success" : metrics.score >= 60 ? "warning" : "error"}>Beta readiness · {metrics.score}%</Badge><Badge variant={dataSource === "first_party_backend" ? "success" : "warning"}>{dataSource === "first_party_backend" ? "Aggregated backend data" : "Local fallback data"}</Badge></div>
           <Typography variant="hero" className="mt-3">Beta Operations</Typography>
           <Typography variant="subtitle" className="mt-2">Internal telemetry for the current beta cohort.</Typography>
         </div>

@@ -25,6 +25,7 @@ import { useAuth } from "@clerk/nextjs";
 import { useMemo } from "react";
 import { ApiClient } from "./client";
 import { Endpoints } from "./endpoints";
+import { analytics } from "@/services/analytics";
 
 export type RuntimeMode = "live" | "fixtures";
 
@@ -48,6 +49,11 @@ export function useApi(): UseApi {
   const { getToken } = useAuth();
   const mode = getRuntimeMode();
   const baseUrl = getApiBaseUrl();
+
+  useMemo(() => {
+    if (mode === "live") analytics.configureBackend({ baseUrl, getToken });
+    return null;
+  }, [mode, baseUrl, getToken]);
 
   const endpoints = useMemo<Endpoints | null>(() => {
     if (mode !== "live") return null;

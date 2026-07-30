@@ -27,7 +27,14 @@ def require_tenant_row(
     return get_or_create_tenant(db, claims)
 
 
+def require_admin(claims: Annotated[ClerkClaims, Depends(require_claims)]):
+    if claims.role != "admin":
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Administrator access required")
+    return claims
+
+
 DbSession = Annotated[Session, Depends(get_db)]
 Tenant_ = Annotated[str, Depends(require_tenant_id)]
 TenantRow = Annotated[Tenant, Depends(require_tenant_row)]
 Claims = Annotated[ClerkClaims, Depends(require_claims)]
+AdminClaims = Annotated[ClerkClaims, Depends(require_admin)]

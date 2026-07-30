@@ -43,6 +43,7 @@ export type AnalyticsEventName =
 // ── Event Types ─────────────────────────────────────────────
 
 export interface AnalyticsEvent {
+  eventId?: string;
   /** Event name from ANALYTICS_EVENTS */
   name: AnalyticsEventName;
   /** Unix timestamp (ms) when the event occurred */
@@ -59,6 +60,7 @@ const MAX_STORED_EVENTS = 1000;
 class Analytics {
   private events: AnalyticsEvent[] = [];
   private enabled = true;
+  private backend?: { baseUrl: string; getToken: () => Promise<string | null> };
 
   constructor() {
     this.load();
@@ -74,6 +76,7 @@ class Analytics {
     if (!this.enabled) return;
 
     const event: AnalyticsEvent = {
+      eventId: `${name}-${Date.now()}-${crypto.randomUUID()}`,
       name,
       timestamp: Date.now(),
       properties,
@@ -81,6 +84,7 @@ class Analytics {
 
     this.events.push(event);
     this.persist();
+    void this.sendToBackend(event);
 
     if (process.env.NODE_ENV === "development") {
       console.log(`[Analytics] ${name}`, properties ?? "");
@@ -109,13 +113,16 @@ class Analytics {
 
   /** Flush events to a backend endpoint (stub for future use) */
   async flush(): Promise<void> {
-    // Future: POST to first-party backend endpoint
-    // For now, just keep events in localStorage
+    for (const event of this.events) await this.sendToBackend(event);
     if (process.env.NODE_ENV === "development") {
       console.log(
         `[Analytics] Flush called — ${this.events.length} events queued`,
       );
     }
+  }
+
+  configureBackend(config: { baseUrl: string; getToken: () => Promise<string | null> }) {
+    this.backend = config;
   }
 
   // ── Internal ────────────────────────────────────────────
@@ -127,6 +134,26 @@ class Analytics {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed));
     } catch {
       // localStorage full or unavailable — silently drop
+    }
+  }
+
+  private async sendToBackend(event: AnalyticsEvent): Promise<void> {
+    if (!this.backend) return;
+    try {
+      const token = await this.backend.getToken();
+      if (!token) return;
+      await fetch(`${this.backend.baseUrl}/api/v1/analytics/events`, {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          event_id: event.eventId ?? `${event.name}-${event.timestamp}-${crypto.randomUUID()}`,
+          event_name: event.name,
+          occurred_at: new Date(event.timestamp).toISOString(),
+          properties: event.properties ?? {},
+        }),
+      });
+    } catch {
+      // Analytics must never affect the product. Local persistence remains the fallback.
     }
   }
 
