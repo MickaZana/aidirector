@@ -38,6 +38,7 @@ Renderer = Literal[
     "ffmpeg_basic",
     "sports_hype",
     "documentary",
+    "conversation",
     "static",
 ]
 """Concrete render pipeline that consumes this manifest.

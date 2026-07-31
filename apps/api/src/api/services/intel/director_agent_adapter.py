@@ -47,7 +47,7 @@ WHITELISTED_FIELDS = frozenset(
 _VALID_PACING: frozenset[Pacing] = frozenset(("fast", "medium", "slow"))
 _VALID_CAPTION_STYLE: frozenset[CaptionStyle] = frozenset(("sports_hype", "minimal", "documentary"))
 _VALID_RENDER_STYLE: frozenset[RenderStyle] = frozenset(
-    ("ffmpeg_basic", "sports_hype", "documentary", "static")
+    ("ffmpeg_basic", "sports_hype", "documentary", "conversation", "static")
 )
 
 MAX_HOOK_OPTIONS = 4

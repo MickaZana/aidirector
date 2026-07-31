@@ -60,3 +60,26 @@ git commit -m "bump intel to <short-sha>"
 - Director Agent output is **always** strict Pydantic JSON. See `apps/api/schemas/director_plan.py`.
 - Renderers read `RenderPlan` JSON, write a `RenderResult` row. Nothing else flows between them.
 - OmegaClips' 272 tests must stay green when the submodule SHA bumps. Run them in CI for the submodule before accepting the bump.
+## Browser tools in Antigravity IDE
+
+This workspace includes a project-scoped Chrome DevTools MCP server at
+`.agents/mcp_config.json`. Antigravity IDE loads it for agents opened from
+this workspace, allowing them to inspect and control a Chrome instance.
+
+To activate it in Antigravity:
+
+1. Open the agent side panel menu (`...`) and choose **MCP Servers**.
+2. Open **Manage MCP Servers** and reload the configuration, or restart the
+   IDE if the server is not listed.
+3. Approve the `chrome-devtools` tools when the agent first requests them.
+4. Ask the agent to start the local app and verify it in Chrome.
+
+If the server does not connect, verify that `node` and `npx` are on the PATH
+visible to Antigravity, then inspect the MCP connection log from the same
+panel. The server starts Chrome on demand; no persistent browser process is
+required in the application itself.
+
+Antigravity's built-in Browser Subagent is separate from MCP. If the task
+specifically requires that built-in capability, enable Browser in the agent's
+capabilities/settings and reload the agent; the workspace configuration cannot
+force-enable a product-level capability.

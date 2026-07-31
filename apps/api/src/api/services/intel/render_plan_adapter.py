@@ -282,7 +282,7 @@ def _build_ffmpeg_command(ffmpeg: str, manifest: RenderManifest, output_path: Pa
     #              Crops from center of source to match target aspect
     #              ratio, then scales to fill output. Best for talking
     #              heads, static cameras.
-    #   "action","face","manual" → dynamic crop + scale
+    #   "action","face","smart","manual" → dynamic crop + scale
     #              Same as center for now. When per-frame tracking data
     #              is available from the OmegaClips pipeline, this branch
     #              will use it to follow the subject dynamically.

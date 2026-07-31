@@ -27,6 +27,7 @@ from api.schemas.director_plan import (
     Variant,
 )
 from api.services.platform_optimizer import get_preset
+from api.content_types import ContentType, normalize_content_type
 
 # --- Defaults policy --------------------------------------------------------
 #
@@ -53,6 +54,7 @@ def build_director_plan(
     platform_targets: list[PlatformTarget],
     user_preferences: dict | None = None,
     max_candidates: int = DEFAULT_MAX_CANDIDATES,
+    content_type: str = "football",
 ) -> DirectorPlan:
     """Build a validated DirectorPlan from ranked candidates.
 
@@ -68,6 +70,7 @@ def build_director_plan(
     so any drift from the contract raises at build time, not at persist time.
     """
     user_preferences = user_preferences or {}
+    normalized_content_type: ContentType = normalize_content_type(content_type)
 
     selected = _select_top_candidates(
         candidates,
@@ -92,9 +95,9 @@ def build_director_plan(
                 clip_end=float(cand.t_end),
                 duration=max(0.5, float(cand.t_end) - float(cand.t_start)),
                 pacing=_default_pacing(cand),
-                caption_style=_default_caption_style(cand),
-                crop_strategy=DEFAULT_CROP_STRATEGY,
-                render_style=DEFAULT_RENDER_STYLE,
+                caption_style=("documentary" if normalized_content_type == "podcast" else _default_caption_style(cand)),
+                crop_strategy=("smart" if normalized_content_type == "podcast" else DEFAULT_CROP_STRATEGY),
+                render_style=("conversation" if normalized_content_type == "podcast" else DEFAULT_RENDER_STYLE),
                 hook_options=[],
                 variants=variants,
             )
@@ -105,6 +108,7 @@ def build_director_plan(
     return DirectorPlan(
         upload_id=upload_id,
         job_id=job_id,
+        content_type=normalized_content_type,
         model=DEFAULT_DIRECTOR_MODEL,
         prompt_version="v1",
         platform_targets=platform_targets,

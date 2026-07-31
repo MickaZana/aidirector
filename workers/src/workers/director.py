@@ -31,7 +31,8 @@ def direct_render_plan(job_id: str, model: str = "claude-sonnet-4-6") -> dict:
     from sqlalchemy.orm import Session
 
     from api.db import engine
-    from api.models import ClipCandidate, Job, Scene
+    from api.models import ClipCandidate, Job, Scene, Upload
+    from api.content_types import normalize_content_type
     from api.schemas.director_plan import DirectorPlan as DirectorPlanContract
     from api.services.director_plan_builder import build_director_plan as _build_deterministic
     from api.services.director_plan_persistence import persist_director_plan
@@ -51,6 +52,8 @@ def direct_render_plan(job_id: str, model: str = "claude-sonnet-4-6") -> dict:
             .scalars()
             .all()
         )
+        upload = db.execute(select(Upload).where(Upload.id == job.upload_id)).scalar_one_or_none()
+        content_type = normalize_content_type(upload.sport if upload else "football")
 
         candidates = (
             db.execute(
@@ -89,8 +92,9 @@ def direct_render_plan(job_id: str, model: str = "claude-sonnet-4-6") -> dict:
                 for c in candidates[:20]
             )
 
+            prompt_subject = "conversation video director" if content_type == "podcast" else "sports video director"
             prompt = (
-                f"You are an expert sports video director. Create a DirectorPlan "
+                f"You are an expert {prompt_subject}. Create a DirectorPlan "
                 f"for job {job_id} with the following scenes and candidates.\n\n"
                 f"Scenes ({len(scenes)}):\n{scene_summaries}\n\n"
                 f"Candidates ({len(candidates)}):\n{candidate_summaries}\n\n"
@@ -128,6 +132,7 @@ def direct_render_plan(job_id: str, model: str = "claude-sonnet-4-6") -> dict:
                     job_id=job_id,
                     candidates=llm_selected,
                     platform_targets=["youtube_shorts", "tiktok", "instagram_reels"],
+                    content_type=content_type,
                 )
                 row = persist_director_plan(db, job=job, plan=plan)
                 db.commit()
@@ -152,6 +157,7 @@ def direct_render_plan(job_id: str, model: str = "claude-sonnet-4-6") -> dict:
                 job_id=job_id,
                 candidates=candidates,
                 platform_targets=["youtube_shorts", "tiktok", "instagram_reels"],
+                content_type=content_type,
             )
             row = persist_director_plan(db, job=job, plan=plan)
             db.commit()

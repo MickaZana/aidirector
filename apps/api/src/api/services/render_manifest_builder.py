@@ -185,6 +185,7 @@ def _build_one(
         filename_template=preset["filename_template"],
         output_filename=filename,
         execution_metadata={
+            "content_type": plan.content_type,
             "pacing": candidate.pacing,
             "hook_options": list(candidate.hook_options),
             "caption_safe_zone": variant.caption_safe_zone,

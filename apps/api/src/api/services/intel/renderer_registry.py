@@ -104,8 +104,7 @@ _DOCUMENTARY = RendererCapability(
     ),
     min_duration_s=5.0,
     max_duration_s=600.0,
-    notes="Phase 5 stub. Documentary renderer not viable for vertical "
-    "platforms — note the 9:16 exclusion.",
+    notes="Phase 5 stub. Documentary renderer is for landscape and square output.",
 )
 
 _STATIC = RendererCapability(
@@ -121,12 +120,26 @@ _STATIC = RendererCapability(
     notes="Static-image renderer. Caller supplies template + duration.",
 )
 
+_CONVERSATION = RendererCapability(
+    renderer="conversation",
+    supported_aspect_ratios=frozenset({"9:16", "16:9", "1:1"}),
+    supported_styles=frozenset({"conversation"}),
+    supported_caption_modes=frozenset({"basic", "documentary"}),
+    supported_crop_modes=frozenset({"fit", "center", "face", "smart"}),
+    gpu_required=False,
+    capabilities=frozenset({"watermark", "scale", "pad", "crop"}),
+    min_duration_s=3.0,
+    max_duration_s=600.0,
+    notes="Conversation renderer with speaker-aware crop contract and speech-preserving audio.",
+)
+
 
 RENDERERS: dict[Renderer, RendererCapability] = {
     _FFMPEG_BASIC.renderer: _FFMPEG_BASIC,
     _SPORTS_HYPE.renderer: _SPORTS_HYPE,
     _DOCUMENTARY.renderer: _DOCUMENTARY,
     _STATIC.renderer: _STATIC,
+    _CONVERSATION.renderer: _CONVERSATION,
 }
 
 
@@ -151,6 +164,11 @@ def renderer_for_style(style: RenderStyle) -> Renderer:
     without a matching renderer, the builder will get a KeyError here — a
     loud, debuggable failure rather than a silent FFmpeg explosion.
     """
+    # Prefer the renderer whose identity matches the editorial style. The
+    # baseline renderer advertises compatibility fallbacks, but must not
+    # swallow dedicated Podcast/documentary output.
+    if style in RENDERERS:
+        return style  # type: ignore[return-value]
     for cap in RENDERERS.values():
         if style in cap.supported_styles:
             return cap.renderer

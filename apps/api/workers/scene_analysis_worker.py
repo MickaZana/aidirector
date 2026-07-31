@@ -87,10 +87,10 @@ def run_analysis(payload: dict) -> dict:
             source_path = None
 
         # Run OmegaClips FI-1→FI-13 intelligence (or stub fallback)
-        candidates = _run_omega_clips(job_id, source_path, log)
+        candidates = _run_omega_clips(job_id, source_path, log, content_type=upload.sport)
 
         # Run Director Agent LLM (or deterministic fallback)
-        director_plan = _run_director_agent(job_id, candidates, log)
+        director_plan = _run_director_agent(job_id, candidates, log, content_type=upload.sport)
 
         # Persist Scene, ClipCandidate, and DirectorPlan rows + transition
         with SessionLocal() as db:
@@ -274,8 +274,10 @@ def _persist_analysis_result(
     )
 
 
-def _run_omega_clips(job_id: str, source_path, log) -> list[dict]:
+def _run_omega_clips(job_id: str, source_path, log, content_type: str = "football") -> list[dict]:
     """Run OmegaClips FI-1→FI-13 on the source file, falling back to stubs."""
+    if content_type == "podcast":
+        raise RuntimeError("Podcast analysis requires a diarization/transcription adapter")
     try:
         intel_path = Path(__file__).resolve().parents[3] / "packages" / "intel"
         if intel_path.exists() and str(intel_path) not in __import__("sys").path:
@@ -303,7 +305,7 @@ def _run_omega_clips(job_id: str, source_path, log) -> list[dict]:
         ]
 
 
-def _run_director_agent(job_id: str, candidates: list[dict], log) -> dict:
+def _run_director_agent(job_id: str, candidates: list[dict], log, content_type: str = "football") -> dict:
     """Call Anthropic to build a DirectorPlan from ranked candidates.
 
     Falls back to deterministic top-6 by score when the LLM is unavailable.
@@ -318,8 +320,9 @@ def _run_director_agent(job_id: str, candidates: list[dict], log) -> dict:
             raise RuntimeError("ANTHROPIC_API_KEY not set")
 
         client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+        prompt_subject = "conversation video director" if content_type == "podcast" else "sports video director"
         prompt = (
-            f"You are an expert sports video director. "
+            f"You are an expert {prompt_subject}. "
             f"Select the best 6 clips from these {len(candidates)} candidates "
             f"for a cinematic highlight reel. Return a JSON object with key "
             f"'selected_clips' containing the top candidates by fi_score. "

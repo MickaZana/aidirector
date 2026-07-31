@@ -17,6 +17,7 @@ from __future__ import annotations
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
+from api.content_types import ContentType
 
 DIRECTOR_PLAN_VERSION = "1"
 
@@ -29,11 +30,12 @@ PlatformTarget = Literal[
 
 Pacing = Literal["fast", "medium", "slow"]
 CaptionStyle = Literal["sports_hype", "minimal", "documentary"]
-CropStrategy = Literal["fit", "center", "action", "face", "manual"]
+CropStrategy = Literal["fit", "center", "action", "face", "smart", "manual"]
 RenderStyle = Literal[
     "ffmpeg_basic",
     "sports_hype",
     "documentary",
+    "conversation",
     "static",
 ]
 AspectRatio = Literal["9:16", "1:1", "16:9"]
@@ -95,6 +97,7 @@ class DirectorPlan(BaseModel):
     version: str = DIRECTOR_PLAN_VERSION
     upload_id: str
     job_id: str
+    content_type: ContentType = "football"
     model: str
     prompt_version: str = "v1"
     platform_targets: list[PlatformTarget]
