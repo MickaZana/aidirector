@@ -1,0 +1,7 @@
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "apps/api/Dockerfile"
+
+[deploy]
+startCommand = "rq worker --url $REDIS_URL q:render-cpu q:cv q:llm q:export"
+restartPolicyType = "ON_FAILURE"

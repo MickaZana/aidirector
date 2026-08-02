@@ -1,7 +1,9 @@
 # ─── Stage 1: dependency builder ─────────────────────────────────────────────
 FROM python:3.12-slim AS builder
 
-WORKDIR /build
+# Build the virtualenv at the same absolute path used by the runtime image.
+# Console scripts otherwise retain a /build/.venv shebang when copied into /app.
+WORKDIR /app
 
 # Install uv
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
@@ -27,9 +29,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy the pre-built venv and source from builder
-COPY --from=builder /build/.venv /app/.venv
-COPY --from=builder /build/src /app/src
-COPY --from=builder /build/workers /app/workers
+COPY --from=builder /app/.venv /app/.venv
+COPY --from=builder /app/src /app/src
+COPY --from=builder /app/workers /app/workers
 
 # Alembic migrations bundled so the container can run `alembic upgrade head`
 COPY alembic/ /app/alembic/
@@ -51,4 +53,4 @@ USER aidirector
 
 # Default: run the FastAPI app.
 # Override CMD to run alembic migrations or the RQ worker.
-CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
+CMD ["sh", "-c", "uvicorn api.main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 2"]
