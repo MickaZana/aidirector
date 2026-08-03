@@ -4,7 +4,7 @@ WORKDIR /app
 COPY . .
 
 WORKDIR /app/apps/web
-RUN npm install
+RUN npm install --include=dev
 RUN npm run build
 
 EXPOSE 3000
